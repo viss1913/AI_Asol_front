@@ -112,7 +112,7 @@ const Editor = () => {
                     model: "veo-3.1",
                     prompt,
                     image_urls: imageUrl ? [imageUrl] : undefined,
-                    duration,
+                    duration: String(duration),
                     audio,
                     aspect_ratio: aspectRatio,
                     fast_mode: fastMode,
