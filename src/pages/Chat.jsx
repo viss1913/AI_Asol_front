@@ -94,7 +94,7 @@ const Chat = () => {
     };
 
     return (
-        <div className="flex h-screen bg-white pt-24 overflow-hidden font-primary">
+        <div className="flex h-screen bg-white pt-32 overflow-hidden font-primary">
             {/* Sidebar */}
             <motion.aside
                 initial={false}
@@ -111,22 +111,42 @@ const Chat = () => {
                     </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-2">
-                    <h3 className="px-2 mb-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ваши диалоги</h3>
+                <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-1.5 scrollbar-hide">
+                    <div className="flex items-center justify-between px-2 mb-4">
+                        <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ваши диалоги</h3>
+                        <span className="text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full font-bold">{chats.length}</span>
+                    </div>
+
                     {chats.length === 0 ? (
-                        <p className="px-2 text-sm text-slate-400 font-medium italic">Список чатов пуст</p>
+                        <div className="px-2 py-8 text-center bg-white/50 rounded-2xl border border-dashed border-slate-200">
+                            <MessageSquare size={24} className="mx-auto text-slate-200 mb-2" />
+                            <p className="text-xs text-slate-400 font-bold uppercase tracking-tighter">Диалогов нет</p>
+                        </div>
                     ) : (
                         chats.map((chat) => (
                             <button
                                 key={chat.id}
                                 onClick={() => loadHistory(chat.id)}
-                                className={`w-full text-left px-4 py-3.5 rounded-2xl transition-all flex items-center gap-3 ${currentChatId === chat.id
-                                        ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-                                        : 'text-slate-600 hover:bg-white hover:shadow-sm border border-transparent'
+                                className={`w-full text-left px-4 py-3 rounded-xl transition-all flex items-center gap-3 group relative ${currentChatId === chat.id
+                                    ? 'bg-slate-900 text-white shadow-xl shadow-slate-200'
+                                    : 'text-slate-600 hover:bg-white hover:shadow-md border border-transparent'
                                     }`}
                             >
-                                <MessageSquare size={18} className={currentChatId === chat.id ? 'text-indigo-600' : 'text-slate-400'} />
-                                <span className="font-bold text-sm truncate">{chat.title || 'Новый чат'}</span>
+                                {currentChatId === chat.id && (
+                                    <motion.div
+                                        layoutId="active-chat"
+                                        className="absolute left-0 w-1 h-6 bg-indigo-500 rounded-r-full"
+                                    />
+                                )}
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${currentChatId === chat.id ? 'bg-white/10' : 'bg-slate-200/50 group-hover:bg-indigo-50'}`}>
+                                    <MessageSquare size={14} className={currentChatId === chat.id ? 'text-white' : 'text-slate-400 group-hover:text-indigo-500'} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <span className="font-bold text-sm block truncate leading-tight">{chat.title || 'Новый диалог'}</span>
+                                    <span className={`text-[9px] block uppercase tracking-wider font-bold mt-0.5 ${currentChatId === chat.id ? 'text-indigo-300' : 'text-slate-300'}`}>
+                                        {chat.createdAt ? new Date(chat.createdAt).toLocaleDateString() : 'Недавно'}
+                                    </span>
+                                </div>
                             </button>
                         ))
                     )}
@@ -144,64 +164,78 @@ const Chat = () => {
                 </button>
 
                 {/* Chat Header */}
-                <div className="px-8 py-4 border-b border-slate-50 flex items-center justify-between bg-white/50 backdrop-blur-sm">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl overflow-hidden shadow-sm bg-indigo-50 flex items-center justify-center border border-indigo-100">
+                <div className="px-8 py-5 border-b border-slate-100 flex items-center justify-between bg-white shadow-sm z-10">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-md bg-indigo-50 border-2 border-white ring-4 ring-slate-50">
                             <img src={avatarBase} alt="Asol" className="w-full h-full object-cover" />
                         </div>
                         <div>
-                            <h2 className="font-bold text-slate-900">Ассоль</h2>
-                            <div className="flex items-center gap-1.5">
-                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Онлайн</span>
+                            <div className="flex items-center gap-2">
+                                <h2 className="text-lg font-black text-slate-900 leading-tight">Ассоль</h2>
+                                <Sparkles size={14} className="text-indigo-400" />
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Онлайн помощник</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 {/* Messages Area */}
-                <div className="flex-1 overflow-y-auto p-8 space-y-8">
+                <div className="flex-1 overflow-y-auto p-10 space-y-10 scrollbar-hide bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:20px_20px]">
                     {loadingHistory ? (
                         <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4">
-                            <Loader2 size={40} className="animate-spin text-indigo-500" />
-                            <p className="font-bold text-sm uppercase tracking-widest">Загрузка истории...</p>
+                            <div className="relative">
+                                <Loader2 size={48} className="animate-spin text-indigo-500" />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="w-2 h-2 bg-indigo-500 rounded-full animate-ping" />
+                                </div>
+                            </div>
+                            <p className="font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Синхронизация истории</p>
                         </div>
                     ) : (
                         <AnimatePresence>
                             {messages.length === 0 && !currentChatId && (
                                 <motion.div
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    class="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto"
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto"
                                 >
-                                    <div className="w-20 h-20 rounded-3xl bg-indigo-50 flex items-center justify-center text-indigo-500 mb-6 border border-indigo-100 overflow-hidden shadow-lg">
-                                        <img src={avatarBase} alt="Asol" className="w-full h-full object-cover" />
+                                    <div className="w-24 h-24 rounded-[2.5rem] bg-white flex items-center justify-center text-indigo-500 mb-8 border border-slate-100 shadow-2xl relative">
+                                        <img src={avatarBase} alt="Asol" className="w-full h-full object-cover rounded-[2.5rem]" />
+                                        <div className="absolute -bottom-2 -right-2 bg-emerald-500 p-2 rounded-full border-4 border-white shadow-lg">
+                                            <Sparkles size={16} className="text-white" />
+                                        </div>
                                     </div>
-                                    <h3 className="text-2xl font-bold text-slate-900 mb-2 family-outfit">Я готова помочь вам!</h3>
-                                    <p className="text-slate-500 font-medium whitespace-pre-line">Задайте вопрос, и я помогу вам с текстами, маркетингом или идеями.</p>
+                                    <h3 className="text-3xl font-black text-slate-900 mb-3 family-outfit tracking-tight leading-tight">Я ваша <span className="text-indigo-600">Ассоль</span></h3>
+                                    <p className="text-slate-500 font-bold leading-relaxed px-6">Ваш персональный интеллект под алыми парусами. Чем займемся сегодня?</p>
                                 </motion.div>
                             )}
                             {messages.map((msg, index) => (
                                 <motion.div
                                     key={msg.id || index}
-                                    initial={{ opacity: 0, y: 10 }}
+                                    initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    className={`flex gap-5 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+                                    className={`flex gap-6 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
                                 >
-                                    <div className={`w-12 h-12 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-sm overflow-hidden ${msg.role === 'user' ? 'bg-slate-900 text-white' : 'bg-white border border-slate-100'}`}>
+                                    <div className={`w-12 h-12 rounded-[1.25rem] flex-shrink-0 flex items-center justify-center shadow-lg overflow-hidden border-2 border-white ring-4 ring-slate-50 ${msg.role === 'user' ? 'bg-slate-900 text-white' : 'bg-white'}`}>
                                         {msg.role === 'user' ? <User size={24} /> : <img src={avatarBase} alt="Asol" className="w-full h-full object-cover" />}
                                     </div>
-                                    <div className="flex flex-col max-w-[80%] gap-2">
-                                        <div className={`px-8 py-5 rounded-3xl ${msg.role === 'user'
-                                                ? 'bg-slate-900 text-white shadow-xl shadow-slate-200'
-                                                : 'bg-slate-50 text-slate-800 border border-slate-100 shadow-sm'
+                                    <div className="flex flex-col max-w-[75%] gap-2.5">
+                                        <div className={`px-8 py-6 rounded-[2rem] text-[15px] font-bold leading-relaxed ${msg.role === 'user'
+                                                ? 'bg-slate-900 text-white shadow-2xl shadow-indigo-100/50'
+                                                : 'bg-white text-slate-800 border border-slate-100 shadow-xl shadow-slate-200/50'
                                             }`}>
-                                            <p className="font-medium leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                                            <p className="whitespace-pre-wrap">{msg.content}</p>
                                         </div>
                                         {msg.cost > 0 && (
-                                            <span className={`text-[10px] font-bold uppercase tracking-widest ${msg.role === 'user' ? 'text-right' : 'text-left'} text-slate-300`}>
-                                                Стоимость: {msg.cost.toFixed(3)} ₽
-                                            </span>
+                                            <div className={`flex items-center gap-2 px-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                                                <div className="h-[1px] w-4 bg-slate-200" />
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">
+                                                    {msg.cost.toFixed(3)} ₽
+                                                </span>
+                                            </div>
                                         )}
                                     </div>
                                 </motion.div>
