@@ -15,8 +15,8 @@ const Chat = () => {
 
     const messagesEndRef = useRef(null);
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const scrollToBottom = (instant = false) => {
+        messagesEndRef.current?.scrollIntoView({ behavior: instant ? "auto" : "smooth" });
     };
 
     useEffect(() => {
@@ -56,7 +56,7 @@ const Chat = () => {
 
     const handleNewChat = () => {
         setCurrentChatId(null);
-        setMessages([{ id: 'welcome', role: 'assistant', content: 'Привет! Я ваша Ассоль. Чем я могу вам помочь сегодня?' }]);
+        setMessages([]); // Clear to show the pretty empty state
     };
 
     const handleSend = async (e) => {
@@ -288,8 +288,8 @@ const Chat = () => {
                             {loading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
                         </button>
                     </form>
-                    <div className="mt-2 text-center">
-                        <span className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">
+                    <div className="mt-1 text-center opacity-40">
+                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">
                             ИИ Ассоль • Алые Паруса 2026
                         </span>
                     </div>

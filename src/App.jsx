@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import Navbar from './components/layout/Navbar';
 import Landing from './pages/Landing';
@@ -16,6 +16,7 @@ const ProtectedRoute = ({ children }) => {
 };
 
 function App() {
+  const location = useLocation();
   const [token, setToken] = useState(localStorage.getItem('token'));
 
   // Sync token state if needed
@@ -25,41 +26,43 @@ function App() {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
+  const isChat = location.pathname.startsWith('/chat');
+
   return (
-    <Router>
-      <div className="min-h-screen bg-white">
-        <Navbar />
-        <main>
-          <Routes>
-            <Route path="/" element={<Landing />} />
+    <div className={`min-h-screen bg-white ${isChat ? 'h-screen overflow-hidden' : ''}`}>
+      <Navbar />
+      <main className={isChat ? 'h-full' : ''}>
+        <Routes>
+          <Route path="/" element={<Landing />} />
 
-            <Route path="/auth" element={
-              token ? <Navigate to="/studio" replace /> : <Auth onLogin={() => setToken(localStorage.getItem('token'))} />
-            } />
+          <Route path="/auth" element={
+            token ? <Navigate to="/studio" replace /> : <Auth onLogin={() => setToken(localStorage.getItem('token'))} />
+          } />
 
-            <Route path="/studio" element={
-              <ProtectedRoute>
-                <Home />
-              </ProtectedRoute>
-            } />
+          <Route path="/studio" element={
+            <ProtectedRoute>
+              <Home />
+            </ProtectedRoute>
+          } />
 
-            <Route path="/editor" element={
-              <ProtectedRoute>
-                <Editor />
-              </ProtectedRoute>
-            } />
+          <Route path="/editor" element={
+            <ProtectedRoute>
+              <Editor />
+            </ProtectedRoute>
+          } />
 
-            <Route path="/chat" element={
-              <ProtectedRoute>
-                <Chat />
-              </ProtectedRoute>
-            } />
+          <Route path="/chat" element={
+            <ProtectedRoute>
+              <Chat />
+            </ProtectedRoute>
+          } />
 
-            {/* Redirect any other route to landing or home */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </main>
+          {/* Redirect any other route to landing or home */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
 
+      {!isChat && (
         <footer className="py-12 px-6 border-t border-slate-100 mt-12 bg-white">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="text-xl font-bold tracking-tight family-outfit text-slate-900">
@@ -72,8 +75,8 @@ function App() {
             </p>
           </div>
         </footer>
-      </div>
-    </Router>
+      )}
+    </div>
   );
 }
 
