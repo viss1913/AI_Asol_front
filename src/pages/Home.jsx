@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, Filter, MoreVertical, Play, Image as ImageIcon, Loader2, Folder, X } from 'lucide-react';
+import { Plus, Search, Filter, MoreVertical, Play, Image as ImageIcon, Loader2, Folder, X, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../components/common/Button';
 import { projectService } from '../services/api';

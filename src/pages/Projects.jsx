@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Folder, Plus, Clock, MessageSquare, Image as ImageIcon, Video, ArrowRight, Trash2, Search, Filter, Loader2, CreditCard } from 'lucide-react';
+import { Folder, Plus, Clock, MessageSquare, Image as ImageIcon, Video, ArrowRight, Trash2, Search, Filter, Loader2, CreditCard, Sparkles } from 'lucide-react';
 import { projectService } from '../services/api';
 import Button from '../components/common/Button';
 
@@ -97,8 +97,8 @@ const Projects = () => {
                                 onClick={() => handleSelectProject(project)}
                                 whileHover={{ y: -4 }}
                                 className={`p-6 rounded-[2rem] border transition-all cursor-pointer ${selectedProject?.id === project.id
-                                        ? 'bg-white border-indigo-200 shadow-xl shadow-indigo-50 ring-1 ring-indigo-50'
-                                        : 'bg-white border-slate-100 hover:border-indigo-100'
+                                    ? 'bg-white border-indigo-200 shadow-xl shadow-indigo-50 ring-1 ring-indigo-50'
+                                    : 'bg-white border-slate-100 hover:border-indigo-100'
                                     }`}
                             >
                                 <div className="flex items-start justify-between mb-4">
