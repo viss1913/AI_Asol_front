@@ -6,6 +6,7 @@ import Home from './pages/Home';
 import Editor from './pages/Editor';
 import Auth from './pages/Auth';
 import Chat from './pages/Chat';
+import Projects from './pages/Projects';
 
 const ProtectedRoute = ({ children }) => {
   const isAuthenticated = !!localStorage.getItem('token');
@@ -54,6 +55,12 @@ function App() {
           <Route path="/chat" element={
             <ProtectedRoute>
               <Chat />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/projects" element={
+            <ProtectedRoute>
+              <Projects />
             </ProtectedRoute>
           } />
 

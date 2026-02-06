@@ -27,22 +27,45 @@ export const authService = {
     logout: () => {
         localStorage.removeItem('token');
     },
+    getProfile: async () => {
+        const response = await api.get('/auth/me');
+        return response.data;
+    },
+};
+
+export const projectService = {
+    create: async (projectData) => {
+        const response = await api.post('/projects', projectData);
+        return response.data;
+    },
+    list: async () => {
+        const response = await api.get('/projects');
+        return response.data;
+    },
+    getDetails: async (projectId) => {
+        const response = await api.get(`/projects/${projectId}`);
+        return response.data;
+    },
 };
 
 export const contentService = {
-    generateImage: async (prompt, model) => {
-        const response = await api.post('/images/generate', { prompt, model });
+    generateImage: async (prompt, model, projectId) => {
+        const response = await api.post('/images/generate', { prompt, model, projectId });
         return response.data;
     },
-    editImage: async (prompt, model, imageUrl) => {
-        const response = await api.post('/images/generate', { prompt, model, image_url: imageUrl });
+    editImage: async (prompt, model, imageUrl, projectId) => {
+        const response = await api.post('/images/generate', { prompt, model, image_url: imageUrl, projectId });
+        return response.data;
+    },
+    generateVideo: async (videoData) => {
+        const response = await api.post('/video/generate', videoData);
         return response.data;
     },
 };
 
 export const chatService = {
-    sendMessage: async (message, chatId) => {
-        const response = await api.post('/chat/send', { message, chatId });
+    sendMessage: async (message, chatId, projectId) => {
+        const response = await api.post('/chat/send', { message, chatId, projectId });
         return response.data;
     },
     getChats: async () => {
@@ -51,6 +74,10 @@ export const chatService = {
     },
     getChatHistory: async (chatId) => {
         const response = await api.get(`/chat/history/${chatId}`);
+        return response.data;
+    },
+    deleteChat: async (chatId) => {
+        const response = await api.delete(`/chat/${chatId}`);
         return response.data;
     },
 };

@@ -2,9 +2,11 @@ import { LayoutDashboard, FileVideo, Wallet, User as UserIcon, LogIn, LogOut, Me
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { authService } from '../../services/api';
+import { useUser } from '../../context/UserContext';
 import logo from '../../assets/logo.png';
 
 const Navbar = () => {
+  const { balance } = useUser();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -19,6 +21,7 @@ const Navbar = () => {
   const authItems = [
     { name: 'Studio', path: '/studio', icon: FileVideo },
     { name: 'Chat', path: '/chat', icon: MessageSquare },
+    { name: 'Проекты', path: '/projects', icon: LayoutDashboard },
   ];
 
   const navItems = isAuthenticated ? authItems : guestItems;
@@ -73,7 +76,7 @@ const Navbar = () => {
             <>
               <div className="hidden sm:flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
                 <Wallet size={14} className="text-indigo-500" />
-                <span className="text-xs font-black text-slate-800 tracking-tighter">500 ₽</span>
+                <span className="text-xs font-black text-slate-800 tracking-tighter">{balance.toLocaleString()} ₽</span>
               </div>
 
               <button

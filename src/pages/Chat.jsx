@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, User, Bot, Sparkles, MessageSquare, Plus, Loader2, ChevronLeft } from 'lucide-react';
-import { chatService } from '../services/api';
+import { chatService, projectService } from '../services/api';
+import { useUser } from '../context/UserContext';
+import { Send, User, Bot, Sparkles, MessageSquare, Plus, Loader2, ChevronLeft, Trash2, Folder, X } from 'lucide-react';
 import avatarBase from '../assets/avatar.png';
 
 const Chat = () => {
+    const { updateBalance } = useUser();
     const [chats, setChats] = useState([]);
     const [currentChatId, setCurrentChatId] = useState(null);
     const [messages, setMessages] = useState([]);
@@ -12,6 +14,10 @@ const Chat = () => {
     const [loading, setLoading] = useState(false);
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [projects, setProjects] = useState([]);
+    const [selectedProjectId, setSelectedProjectId] = useState('');
+    const [isCreatingProject, setIsCreatingProject] = useState(false);
+    const [newProjectTitle, setNewProjectTitle] = useState('');
 
     const messagesEndRef = useRef(null);
 
@@ -25,7 +31,31 @@ const Chat = () => {
 
     useEffect(() => {
         loadChats();
+        fetchProjects();
     }, []);
+
+    const fetchProjects = async () => {
+        try {
+            const data = await projectService.list();
+            setProjects(data || []);
+        } catch (err) {
+            console.error("Failed to fetch projects:", err);
+        }
+    };
+
+    const handleCreateProject = async (e) => {
+        e.preventDefault();
+        if (!newProjectTitle.trim()) return;
+        try {
+            const project = await projectService.create({ title: newProjectTitle });
+            setProjects([project, ...projects]);
+            setSelectedProjectId(project.id);
+            setNewProjectTitle('');
+            setIsCreatingProject(false);
+        } catch (err) {
+            console.error("Failed to create project:", err);
+        }
+    };
 
     const loadChats = async () => {
         try {
@@ -54,6 +84,20 @@ const Chat = () => {
         }
     };
 
+    const handleDeleteChat = async (e, chatId) => {
+        e.stopPropagation();
+        if (!confirm('Удалить этот диалог?')) return;
+        try {
+            await chatService.deleteChat(chatId);
+            setChats(prev => prev.filter(c => c.id !== chatId));
+            if (currentChatId === chatId) {
+                handleNewChat();
+            }
+        } catch (err) {
+            console.error("Failed to delete chat:", err);
+        }
+    };
+
     const handleNewChat = () => {
         setCurrentChatId(null);
         setMessages([]); // Clear to show the pretty empty state
@@ -69,7 +113,11 @@ const Chat = () => {
         setLoading(true);
 
         try {
-            const data = await chatService.sendMessage(input, currentChatId);
+            const data = await chatService.sendMessage(input, currentChatId, selectedProjectId || undefined);
+
+            if (data.newBalance !== undefined) {
+                updateBalance(data.newBalance);
+            }
 
             if (!currentChatId && data.chatId) {
                 setCurrentChatId(data.chatId);
@@ -83,11 +131,19 @@ const Chat = () => {
                 cost: data.cost
             }]);
         } catch (err) {
-            setMessages(prev => [...prev, {
-                id: Date.now() + 1,
-                role: 'assistant',
-                content: 'Ошибка при отправке сообщения. Проверьте баланс или попробуйте позже.'
-            }]);
+            if (err.response?.status === 403 && err.response?.data?.requireTopUp) {
+                setMessages(prev => [...prev, {
+                    id: Date.now() + 1,
+                    role: 'assistant',
+                    content: '⚠️ ' + (err.response.data.error || 'Недостаточно средств для отправки сообщения. Пожалуйста, пополните баланс.')
+                }]);
+            } else {
+                setMessages(prev => [...prev, {
+                    id: Date.now() + 1,
+                    role: 'assistant',
+                    content: 'Ошибка при отправке сообщения. Пожалуйста, попробуйте позже.'
+                }]);
+            }
         } finally {
             setLoading(false);
         }
@@ -105,14 +161,58 @@ const Chat = () => {
                 }}
                 className={`fixed lg:relative z-40 bg-slate-50 border-r border-slate-100 flex flex-col h-[calc(100vh-64px)] lg:h-full transition-all`}
             >
-                <div className="p-6 pb-2">
+                <div className="p-6 pb-2 space-y-4">
                     <button
                         onClick={handleNewChat}
-                        className="flex items-center gap-2 py-2.5 px-5 bg-white border border-slate-200 rounded-xl text-slate-700 font-bold hover:bg-slate-50 transition-all shadow-sm active:scale-95 group"
+                        className="w-full flex items-center justify-center gap-2 py-2.5 px-5 bg-white border border-slate-200 rounded-xl text-slate-700 font-bold hover:bg-slate-50 transition-all shadow-sm active:scale-95 group"
                     >
                         <Plus size={18} className="text-indigo-600 transition-transform group-hover:rotate-90" />
                         <span className="text-sm">Новый чат</span>
                     </button>
+
+                    {/* Project Selector in Sidebar */}
+                    <div className="p-3 bg-white border border-slate-100 rounded-xl">
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                <Folder size={10} />
+                                Проект
+                            </label>
+                            {!isCreatingProject && (
+                                <button
+                                    onClick={() => setIsCreatingProject(true)}
+                                    className="text-[9px] font-bold text-indigo-600 hover:underline flex items-center gap-0.5"
+                                >
+                                    <Plus size={8} />
+                                    Создать
+                                </button>
+                            )}
+                        </div>
+
+                        {isCreatingProject ? (
+                            <form onSubmit={handleCreateProject} className="flex gap-1">
+                                <input
+                                    autoFocus
+                                    value={newProjectTitle}
+                                    onChange={(e) => setNewProjectTitle(e.target.value)}
+                                    placeholder="..."
+                                    className="flex-1 bg-slate-50 border border-indigo-50 rounded-lg px-2 py-1 text-[11px] outline-none"
+                                />
+                                <button type="submit" className="text-indigo-600"><Plus size={14} /></button>
+                                <button onClick={() => setIsCreatingProject(false)} className="text-slate-400"><X size={14} /></button>
+                            </form>
+                        ) : (
+                            <select
+                                value={selectedProjectId}
+                                onChange={(e) => setSelectedProjectId(e.target.value)}
+                                className="w-full bg-slate-50 border-none rounded-lg px-2 py-1.5 text-[11px] font-bold text-slate-600 outline-none cursor-pointer"
+                            >
+                                <option value="">Без проекта</option>
+                                {projects.map(p => (
+                                    <option key={p.id} value={p.id}>{p.title}</option>
+                                ))}
+                            </select>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-1.5 scrollbar-hide">
@@ -151,6 +251,13 @@ const Chat = () => {
                                         {chat.createdAt ? new Date(chat.createdAt).toLocaleDateString() : 'Недавно'}
                                     </span>
                                 </div>
+
+                                <button
+                                    onClick={(e) => handleDeleteChat(e, chat.id)}
+                                    className={`p-2 rounded-lg transition-all opacity-0 group-hover:opacity-100 hover:bg-red-500/10 text-slate-400 hover:text-red-500`}
+                                >
+                                    <Trash2 size={14} />
+                                </button>
                             </button>
                         ))
                     )}
