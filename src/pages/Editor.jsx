@@ -119,7 +119,7 @@ const Editor = () => {
                     duration: String(duration),
                     audio,
                     aspect_ratio: aspectRatio,
-                    fast_mode: fastMode,
+                    fast: fastMode,
                     projectId: selectedProjectId || undefined
                 });
                 if (data.resultUrl) {
