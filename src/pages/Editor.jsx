@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
-import { Sparkles, Image as ImageIcon, Video, Wand2, Download, Share2, CornerUpLeft, Upload as UploadIcon, AlertCircle, Clock, Volume2, VolumeX, Maximize2, Zap } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, Video, Wand2, Download, Share2, CornerUpLeft, Upload as UploadIcon, AlertCircle, Clock, Volume2, VolumeX, Maximize2, Zap, Loader2 } from 'lucide-react';
 import Button from '../components/common/Button';
 import { contentService, projectService } from '../services/api';
 import { useUser } from '../context/UserContext';
@@ -29,6 +29,7 @@ const Editor = () => {
     const [showTopUpModal, setShowTopUpModal] = useState(false);
     const [isCreatingProject, setIsCreatingProject] = useState(false);
     const [newProjectTitle, setNewProjectTitle] = useState('');
+    const fileInputRef = useRef(null);
 
     useEffect(() => {
         const savedHistory = localStorage.getItem('generation_history');
@@ -69,6 +70,25 @@ const Editor = () => {
         const newHistory = [item, ...history].slice(0, 50); // Keep last 50
         setHistory(newHistory);
         localStorage.setItem('generation_history', JSON.stringify(newHistory));
+    };
+
+    const [uploading, setUploading] = useState(false);
+
+    const handleFileUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setUploading(true);
+        setError(null);
+        try {
+            const data = await contentService.uploadFile(file);
+            setImageUrl(data.url);
+        } catch (err) {
+            console.error("Upload failed:", err);
+            setError("Ошибка загрузки файла. Попробуйте снова.");
+        } finally {
+            setUploading(false);
+        }
     };
 
     const handleGenerate = async () => {
@@ -392,15 +412,27 @@ const Editor = () => {
 
                     {/* Image-to-Video / Reference Section */}
                     {activeTab === 'video' && (
-                        <section className="bg-slate-50 border-2 border-dashed border-slate-200 p-6 rounded-3xl group hover:border-[#6366f1] transition-all cursor-pointer overflow-hidden">
+                        <section
+                            onClick={() => fileInputRef.current?.click()}
+                            className="bg-slate-50 border-2 border-dashed border-slate-200 p-6 rounded-3xl group hover:border-[#6366f1] transition-all cursor-pointer overflow-hidden relative"
+                        >
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileUpload}
+                                accept="image/*"
+                                className="hidden"
+                            />
                             <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-4">
                                     <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-slate-400 group-hover:text-[#6366f1] transition-all shadow-sm">
-                                        <UploadIcon size={24} />
+                                        {uploading ? <Loader2 size={24} className="animate-spin text-indigo-500" /> : <UploadIcon size={24} />}
                                     </div>
                                     <div>
                                         <p className="font-bold text-slate-700">Оживить фото</p>
-                                        <p className="text-xs text-slate-400 font-medium tracking-tight">Image-to-Video режим</p>
+                                        <p className="text-xs text-slate-400 font-medium tracking-tight">
+                                            {uploading ? 'Загрузка...' : 'Image-to-Video режим'}
+                                        </p>
                                     </div>
                                 </div>
                                 <CornerUpLeft size={18} className="text-slate-300 group-hover:text-[#6366f1]" />

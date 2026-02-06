@@ -58,7 +58,18 @@ export const contentService = {
         return response.data;
     },
     generateVideo: async (videoData) => {
-        const response = await api.post('/video/generate', videoData);
+        const response = await api.post('/videos/generate', videoData);
+        return response.data;
+    },
+    uploadFile: async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('type', 'image');
+        const response = await api.post('/upload', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
         return response.data;
     },
 };
