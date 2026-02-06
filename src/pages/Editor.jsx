@@ -32,16 +32,20 @@ const Editor = () => {
     const fileInputRef = useRef(null);
 
     useEffect(() => {
-        const savedHistory = localStorage.getItem('generation_history');
-        if (savedHistory) {
-            try {
-                setHistory(JSON.parse(savedHistory));
-            } catch (e) {
-                console.error("Failed to parse history", e);
-            }
-        }
         fetchProjects();
     }, []);
+
+    useEffect(() => {
+        const handleBeforeUnload = (e) => {
+            if (isGenerating) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [isGenerating]);
 
     const fetchProjects = async () => {
         try {
@@ -512,7 +516,7 @@ const Editor = () => {
                                         </div>
                                         <div className="text-center">
                                             <p className="text-slate-800 font-black text-lg mb-1">{activeTab === 'video' ? 'Рендерим видео...' : 'Генерируем шедевр...'}</p>
-                                            <p className="text-slate-400 text-sm font-medium">Это может занять до минуты</p>
+                                            <p className="text-slate-400 text-sm font-medium">Это может занять до 5 минут. Пожалуйста, не закрывайте вкладку.</p>
                                         </div>
                                     </motion.div>
                                 ) : error ? (
