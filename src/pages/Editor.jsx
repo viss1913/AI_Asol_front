@@ -111,7 +111,7 @@ const Editor = () => {
                 data = await contentService.generateVideo({
                     model: "veo-3.1",
                     prompt,
-                    image_url: imageUrl || undefined,
+                    image_urls: imageUrl ? [imageUrl] : undefined,
                     duration,
                     audio,
                     aspect_ratio: aspectRatio,
