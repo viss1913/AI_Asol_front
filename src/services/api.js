@@ -40,4 +40,19 @@ export const contentService = {
     },
 };
 
+export const chatService = {
+    sendMessage: async (message, chatId) => {
+        const response = await api.post('/chat/send', { message, chatId });
+        return response.data;
+    },
+    getChats: async () => {
+        const response = await api.get('/chat/list');
+        return response.data;
+    },
+    getChatHistory: async (chatId) => {
+        const response = await api.get(`/chat/history/${chatId}`);
+        return response.data;
+    },
+};
+
 export default api;
