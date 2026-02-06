@@ -105,13 +105,13 @@ const Chat = () => {
                 }}
                 className={`fixed lg:relative z-40 bg-slate-50 border-r border-slate-100 flex flex-col h-[calc(100vh-64px)] lg:h-full transition-all`}
             >
-                <div className="p-6">
+                <div className="p-6 pb-2">
                     <button
                         onClick={handleNewChat}
-                        className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-white border border-slate-200 rounded-2xl text-slate-700 font-bold hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+                        className="flex items-center gap-2 py-2.5 px-5 bg-white border border-slate-200 rounded-xl text-slate-700 font-bold hover:bg-slate-50 transition-all shadow-sm active:scale-95 group"
                     >
-                        <Plus size={20} className="text-indigo-600" />
-                        Новый чат
+                        <Plus size={18} className="text-indigo-600 transition-transform group-hover:rotate-90" />
+                        <span className="text-sm">Новый чат</span>
                     </button>
                 </div>
 
@@ -225,8 +225,8 @@ const Chat = () => {
                                     </div>
                                     <div className={`flex flex-col max-w-[85%] md:max-w-[70%] gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                                         <div className={`px-5 md:px-6 py-3 md:py-4 rounded-2xl text-[14px] md:text-[15px] font-bold leading-relaxed shadow-sm ${msg.role === 'user'
-                                                ? 'bg-slate-900 text-white rounded-tr-none'
-                                                : 'bg-white text-slate-800 border border-slate-100 rounded-tl-none'
+                                            ? 'bg-slate-900 text-white rounded-tr-none'
+                                            : 'bg-white text-slate-800 border border-slate-100 rounded-tl-none'
                                             }`}>
                                             <p className="whitespace-pre-wrap">{msg.content}</p>
                                         </div>
