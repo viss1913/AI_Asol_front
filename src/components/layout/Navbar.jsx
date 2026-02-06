@@ -22,8 +22,8 @@ const Navbar = () => {
   const navItems = isAuthenticated ? authItems : guestItems;
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-6 font-primary">
-      <div className="max-w-7xl mx-auto glass-panel rounded-2xl px-6 py-2.5 flex items-center justify-between shadow-xl border border-white/40">
+    <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-4 font-primary">
+      <div className="max-w-7xl mx-auto bg-white shadow-lg border border-slate-100 rounded-2xl px-6 py-2.5 flex items-center justify-between">
         <div className="flex items-center gap-10">
           <Link to="/" className="flex items-center gap-3 group">
             <div className="w-10 h-10 overflow-hidden rounded-xl bg-white flex items-center justify-center p-1 shadow-sm group-hover:scale-105 transition-transform duration-300">

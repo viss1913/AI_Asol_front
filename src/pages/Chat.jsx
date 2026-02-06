@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, User, Bot, Sparkles, Image as ImageIcon, MessageSquare, Plus, Loader2, ChevronLeft } from 'lucide-react';
+import { Send, User, Bot, Sparkles, MessageSquare, Plus, Loader2, ChevronLeft } from 'lucide-react';
 import { chatService } from '../services/api';
+import avatarBase from '../assets/avatar.png';
 
 const Chat = () => {
     const [chats, setChats] = useState([]);
@@ -22,7 +23,6 @@ const Chat = () => {
         scrollToBottom();
     }, [messages]);
 
-    // Загрузка списка чатов при монтировании
     useEffect(() => {
         loadChats();
     }, []);
@@ -41,7 +41,6 @@ const Chat = () => {
         setCurrentChatId(chatId);
         try {
             const data = await chatService.getChatHistory(chatId);
-            // Приводим формат сообщений к используемому в UI
             setMessages(data.map(m => ({
                 id: m.id,
                 role: m.role,
@@ -57,7 +56,7 @@ const Chat = () => {
 
     const handleNewChat = () => {
         setCurrentChatId(null);
-        setMessages([{ id: 'welcome', role: 'assistant', content: 'Привет! Я ваш помощник AI Asol. Чем я могу вам помочь сегодня?' }]);
+        setMessages([{ id: 'welcome', role: 'assistant', content: 'Привет! Я ваша Ассоль. Чем я могу вам помочь сегодня?' }]);
     };
 
     const handleSend = async (e) => {
@@ -72,7 +71,6 @@ const Chat = () => {
         try {
             const data = await chatService.sendMessage(input, currentChatId);
 
-            // Если создался новый чат, обновляем ID и список
             if (!currentChatId && data.chatId) {
                 setCurrentChatId(data.chatId);
                 loadChats();
@@ -96,7 +94,7 @@ const Chat = () => {
     };
 
     return (
-        <div className="flex h-screen bg-white pt-20 overflow-hidden font-primary">
+        <div className="flex h-screen bg-white pt-24 overflow-hidden font-primary">
             {/* Sidebar */}
             <motion.aside
                 initial={false}
@@ -146,16 +144,16 @@ const Chat = () => {
                 </button>
 
                 {/* Chat Header */}
-                <div className="px-8 py-4 border-b border-slate-50 flex items-center justify-between">
+                <div className="px-8 py-4 border-b border-slate-50 flex items-center justify-between bg-white/50 backdrop-blur-sm">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-500">
-                            <Bot size={24} />
+                        <div className="w-10 h-10 rounded-xl overflow-hidden shadow-sm bg-indigo-50 flex items-center justify-center border border-indigo-100">
+                            <img src={avatarBase} alt="Asol" className="w-full h-full object-cover" />
                         </div>
                         <div>
-                            <h2 className="font-bold text-slate-900">AI Chat</h2>
+                            <h2 className="font-bold text-slate-900">Ассоль</h2>
                             <div className="flex items-center gap-1.5">
                                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Обработка в реальном времени</span>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Онлайн</span>
                             </div>
                         </div>
                     </div>
@@ -174,13 +172,13 @@ const Chat = () => {
                                 <motion.div
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto"
+                                    class="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto"
                                 >
-                                    <div className="w-20 h-20 rounded-3xl bg-indigo-50 flex items-center justify-center text-indigo-500 mb-6">
-                                        <Sparkles size={40} />
+                                    <div className="w-20 h-20 rounded-3xl bg-indigo-50 flex items-center justify-center text-indigo-500 mb-6 border border-indigo-100 overflow-hidden shadow-lg">
+                                        <img src={avatarBase} alt="Asol" className="w-full h-full object-cover" />
                                     </div>
-                                    <h3 className="text-2xl font-bold text-slate-900 mb-2 family-outfit">Начните новый диалог</h3>
-                                    <p className="text-slate-500 font-medium">Задайте вопрос AI Asol, и он поможет вам с маркетингом, идеями или текстами.</p>
+                                    <h3 className="text-2xl font-bold text-slate-900 mb-2 family-outfit">Я готова помочь вам!</h3>
+                                    <p className="text-slate-500 font-medium whitespace-pre-line">Задайте вопрос, и я помогу вам с текстами, маркетингом или идеями.</p>
                                 </motion.div>
                             )}
                             {messages.map((msg, index) => (
@@ -190,8 +188,8 @@ const Chat = () => {
                                     animate={{ opacity: 1, y: 0 }}
                                     className={`flex gap-5 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
                                 >
-                                    <div className={`w-12 h-12 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-sm ${msg.role === 'user' ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                                        {msg.role === 'user' ? <User size={24} /> : <div className="p-1"><img src="/src/assets/logo.png" className="w-full h-full object-contain filter grayscale brightness-50" /></div>}
+                                    <div className={`w-12 h-12 rounded-2xl flex-shrink-0 flex items-center justify-center shadow-sm overflow-hidden ${msg.role === 'user' ? 'bg-slate-900 text-white' : 'bg-white border border-slate-100'}`}>
+                                        {msg.role === 'user' ? <User size={24} /> : <img src={avatarBase} alt="Asol" className="w-full h-full object-cover" />}
                                     </div>
                                     <div className="flex flex-col max-w-[80%] gap-2">
                                         <div className={`px-8 py-5 rounded-3xl ${msg.role === 'user'
@@ -202,7 +200,7 @@ const Chat = () => {
                                         </div>
                                         {msg.cost > 0 && (
                                             <span className={`text-[10px] font-bold uppercase tracking-widest ${msg.role === 'user' ? 'text-right' : 'text-left'} text-slate-300`}>
-                                                Стоимость: {msg.cost.toFixed(2)} ₽
+                                                Стоимость: {msg.cost.toFixed(3)} ₽
                                             </span>
                                         )}
                                     </div>
@@ -214,8 +212,8 @@ const Chat = () => {
                                     animate={{ opacity: 1 }}
                                     className="flex gap-5"
                                 >
-                                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-500 shadow-sm">
-                                        <Loader2 size={24} className="animate-spin" />
+                                    <div className="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center overflow-hidden shadow-sm">
+                                        <img src={avatarBase} alt="Asol" className="w-full h-full object-cover opacity-50" />
                                     </div>
                                     <div className="px-8 py-5 rounded-3xl bg-slate-50 border border-slate-100 shadow-sm flex items-center gap-2">
                                         <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
@@ -236,7 +234,7 @@ const Chat = () => {
                             type="text"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder="Напишите ваш запрос или вопрос..."
+                            placeholder="Задайте ваш вопрос Ассоль..."
                             disabled={loading}
                             className="w-full pl-8 pr-20 py-5 bg-slate-50 border border-transparent rounded-[2.5rem] focus:outline-none focus:bg-white focus:border-indigo-500 focus:ring-8 focus:ring-indigo-500/5 transition-all font-bold text-slate-700 shadow-sm"
                         />
