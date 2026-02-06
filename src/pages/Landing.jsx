@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Book, Video, MessageSquare, Zap, Shield, Star } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../components/common/Button';
+import logo from '../assets/logo.png';
 
 const Landing = () => {
     const navigate = useNavigate();
@@ -47,11 +48,16 @@ const Landing = () => {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.6 }}
                     >
+                        <div className="flex justify-center mb-8">
+                            <div className="w-24 h-24 rounded-3xl bg-white shadow-2xl p-3 flex items-center justify-center border border-slate-100">
+                                <img src={logo} alt="AI Asol Logo" className="w-full h-full object-contain" />
+                            </div>
+                        </div>
                         <span className="inline-block px-4 py-2 rounded-full bg-slate-100 text-slate-600 text-sm font-bold tracking-wide uppercase mb-6">
                             Экосистема AI Asol
                         </span>
                         <h1 className="text-5xl md:text-7xl font-bold text-slate-900 mb-8 tracking-tight family-outfit leading-tight">
-                            Ваш <span className="bg-accent-gradient bg-clip-text text-transparent">Интеллект</span><br /> в одном месте
+                            Ваш <span className="bg-accent-gradient bg-clip-text text-transparent italic">Интеллект</span><br /> под Алыми Парусами
                         </h1>
                         <p className="text-xl text-slate-500 max-w-2xl mx-auto mb-10 font-medium">
                             Добро пожаловать в пространство AI Asol. Мы объединили лучшие инструменты искусственного интеллекта для вашего роста и творчества.
