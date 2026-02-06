@@ -94,12 +94,16 @@ const Chat = () => {
     };
 
     return (
-        <div className="flex h-screen bg-white pt-32 overflow-hidden font-primary">
-            {/* Sidebar */}
+        <div className="flex h-screen bg-slate-50 overflow-hidden font-primary pt-16 lg:pt-14 relative selection:bg-indigo-100">
+            {/* Sidebar with mobile support */}
             <motion.aside
                 initial={false}
-                animate={{ width: isSidebarOpen ? 300 : 0, opacity: isSidebarOpen ? 1 : 0 }}
-                className="bg-slate-50 border-r border-slate-100 flex flex-col overflow-hidden"
+                animate={{
+                    width: isSidebarOpen ? (window.innerWidth < 1024 ? '100%' : 300) : 0,
+                    opacity: isSidebarOpen ? 1 : 0,
+                    x: isSidebarOpen ? 0 : -300
+                }}
+                className={`fixed lg:relative z-40 bg-slate-50 border-r border-slate-100 flex flex-col h-[calc(100vh-64px)] lg:h-full transition-all`}
             >
                 <div className="p-6">
                     <button
@@ -155,35 +159,32 @@ const Chat = () => {
 
             {/* Main Chat Area */}
             <main className="flex-1 flex flex-col relative bg-white">
-                {/* Toggle Sidebar Button */}
+                {/* Toggle Sidebar Button - more subtle */}
                 <button
                     onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                    className="absolute -left-4 top-10 z-10 w-8 h-8 bg-white border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-600 shadow-xl transition-all"
+                    className="absolute -left-3 top-4 z-50 w-7 h-7 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-600 shadow-md transition-all hover:scale-110 active:scale-95"
                 >
-                    <ChevronLeft size={18} className={`transition-transform duration-300 ${isSidebarOpen ? '' : 'rotate-180'}`} />
+                    <ChevronLeft size={14} className={`transition-transform duration-500 ${isSidebarOpen ? '' : 'rotate-180'}`} />
                 </button>
 
-                {/* Chat Header */}
-                <div className="px-8 py-5 border-b border-slate-100 flex items-center justify-between bg-white shadow-sm z-10">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-md bg-indigo-50 border-2 border-white ring-4 ring-slate-50">
+                {/* Chat Header - more compact */}
+                <div className="px-6 py-3 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md z-30">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl overflow-hidden shadow-sm bg-indigo-50 border border-white">
                             <img src={avatarBase} alt="Asol" className="w-full h-full object-cover" />
                         </div>
                         <div>
-                            <div className="flex items-center gap-2">
-                                <h2 className="text-lg font-black text-slate-900 leading-tight">Ассоль</h2>
-                                <Sparkles size={14} className="text-indigo-400" />
+                            <div className="flex items-center gap-1.5">
+                                <h2 className="text-base font-black text-slate-900 leading-tight">Ассоль</h2>
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             </div>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Онлайн помощник</span>
-                            </div>
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">AI Assistant</span>
                         </div>
                     </div>
                 </div>
 
-                {/* Messages Area */}
-                <div className="flex-1 overflow-y-auto p-10 space-y-10 scrollbar-hide bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:20px_20px]">
+                {/* Messages Area - adaptive padding */}
+                <div className="flex-1 overflow-y-auto p-4 md:p-10 space-y-6 md:space-y-10 scrollbar-hide bg-[radial-gradient(#e2e8f0_0.5px,transparent_0.5px)] [background-size:24px_24px]">
                     {loadingHistory ? (
                         <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-4">
                             <div className="relative">
@@ -215,27 +216,24 @@ const Chat = () => {
                             {messages.map((msg, index) => (
                                 <motion.div
                                     key={msg.id || index}
-                                    initial={{ opacity: 0, y: 20 }}
+                                    initial={{ opacity: 0, y: 15 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    className={`flex gap-6 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+                                    className={`flex gap-3 md:gap-5 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
                                 >
-                                    <div className={`w-12 h-12 rounded-[1.25rem] flex-shrink-0 flex items-center justify-center shadow-lg overflow-hidden border-2 border-white ring-4 ring-slate-50 ${msg.role === 'user' ? 'bg-slate-900 text-white' : 'bg-white'}`}>
-                                        {msg.role === 'user' ? <User size={24} /> : <img src={avatarBase} alt="Asol" className="w-full h-full object-cover" />}
+                                    <div className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm overflow-hidden border border-slate-100 ${msg.role === 'user' ? 'bg-slate-900 text-white' : 'bg-white'}`}>
+                                        {msg.role === 'user' ? <User size={18} /> : <img src={avatarBase} alt="Asol" className="w-full h-full object-cover" />}
                                     </div>
-                                    <div className="flex flex-col max-w-[75%] gap-2.5">
-                                        <div className={`px-8 py-6 rounded-[2rem] text-[15px] font-bold leading-relaxed ${msg.role === 'user'
-                                                ? 'bg-slate-900 text-white shadow-2xl shadow-indigo-100/50'
-                                                : 'bg-white text-slate-800 border border-slate-100 shadow-xl shadow-slate-200/50'
+                                    <div className={`flex flex-col max-w-[85%] md:max-w-[70%] gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                                        <div className={`px-5 md:px-6 py-3 md:py-4 rounded-2xl text-[14px] md:text-[15px] font-bold leading-relaxed shadow-sm ${msg.role === 'user'
+                                                ? 'bg-slate-900 text-white rounded-tr-none'
+                                                : 'bg-white text-slate-800 border border-slate-100 rounded-tl-none'
                                             }`}>
                                             <p className="whitespace-pre-wrap">{msg.content}</p>
                                         </div>
                                         {msg.cost > 0 && (
-                                            <div className={`flex items-center gap-2 px-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                                                <div className="h-[1px] w-4 bg-slate-200" />
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">
-                                                    {msg.cost.toFixed(3)} ₽
-                                                </span>
-                                            </div>
+                                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-300 px-1 mt-1">
+                                                {msg.cost.toFixed(3)} ₽
+                                            </span>
                                         )}
                                     </div>
                                 </motion.div>
@@ -262,29 +260,39 @@ const Chat = () => {
                 </div>
 
                 {/* Input Area */}
-                <div className="p-8 border-t border-slate-50 bg-white">
-                    <form onSubmit={handleSend} className="max-w-4xl mx-auto relative">
-                        <input
-                            type="text"
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            placeholder="Задайте ваш вопрос Ассоль..."
-                            disabled={loading}
-                            className="w-full pl-8 pr-20 py-5 bg-slate-50 border border-transparent rounded-[2.5rem] focus:outline-none focus:bg-white focus:border-indigo-500 focus:ring-8 focus:ring-indigo-500/5 transition-all font-bold text-slate-700 shadow-sm"
-                        />
-                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                            <button
-                                type="submit"
-                                disabled={!input.trim() || loading}
-                                className="bg-slate-900 text-white p-4 rounded-full hover:bg-indigo-600 transition-all shadow-xl disabled:opacity-30 disabled:hover:bg-slate-900 active:scale-95"
-                            >
-                                {loading ? <Loader2 size={22} className="animate-spin" /> : <Send size={22} />}
-                            </button>
+                <div className="px-6 py-4 border-t border-slate-50 bg-white/80 backdrop-blur-md">
+                    <form onSubmit={handleSend} className="max-w-4xl mx-auto relative flex items-center gap-3">
+                        <div className="relative flex-1">
+                            <input
+                                type="text"
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                placeholder="Задайте вопрос Ассоль..."
+                                disabled={loading}
+                                className="w-full pl-6 pr-12 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all font-bold text-slate-700 shadow-sm text-sm"
+                            />
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                <button
+                                    type="button"
+                                    className="p-2 text-slate-300 hover:text-indigo-500 transition-colors"
+                                >
+                                    <Sparkles size={18} />
+                                </button>
+                            </div>
                         </div>
+                        <button
+                            type="submit"
+                            disabled={!input.trim() || loading}
+                            className="bg-slate-900 text-white p-4 rounded-2xl hover:bg-indigo-600 transition-all shadow-xl disabled:opacity-30 disabled:hover:bg-slate-900 active:scale-95 flex-shrink-0"
+                        >
+                            {loading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+                        </button>
                     </form>
-                    <p className="mt-4 text-center text-[10px] font-bold text-slate-300 uppercase tracking-widest">
-                        ИИ может ошибаться. Проверяйте важную информацию.
-                    </p>
+                    <div className="mt-2 text-center">
+                        <span className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">
+                            ИИ Ассоль • Алые Паруса 2026
+                        </span>
+                    </div>
                 </div>
             </main>
         </div>
