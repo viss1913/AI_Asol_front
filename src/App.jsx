@@ -70,14 +70,12 @@ function App() {
       </main>
 
       {!isChat && (
-        <footer className="py-12 px-6 border-t border-slate-100 mt-12 bg-white">
+        <footer className="py-4 px-6 border-t border-slate-100 mt-6 bg-white">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="text-xl font-bold tracking-tight family-outfit text-slate-900">
-              <span className="bg-accent-gradient bg-clip-text text-transparent">
-                AI Asol
-              </span>
+            <div className="text-sm font-bold tracking-tight family-outfit text-slate-400">
+              AI Asol
             </div>
-            <p className="text-slate-400 text-sm font-medium">
+            <p className="text-slate-400 text-xs font-medium">
               &copy; 2026 AI Asol. Все инструменты в одном месте.
             </p>
           </div>

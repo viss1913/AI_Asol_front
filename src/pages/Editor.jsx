@@ -126,7 +126,7 @@ const Editor = () => {
                     model: videoModel,
                     prompt,
                     image_urls: imageUrl ? [imageUrl] : undefined,
-                    duration: String(duration),
+                    duration: "8",
                     audio,
                     aspect_ratio: aspectRatio,
                     fast: fastMode,
@@ -142,8 +142,12 @@ const Editor = () => {
                 try {
                     const task = await historyService.getTaskStatus(taskId);
 
-                    if (task.status === 'success' || (task.status === 'completed' && task.resultUrl)) {
-                        const url = task.resultUrl || (task.result?.[0] || task.image_url || task.url);
+                    if (task.status === 'success' || task.status === 'completed') {
+                        const url = task.resultUrl || task.video_url || task.image_url || (task.result?.[0]) || task.url;
+                        if (!url && task.status === 'success') {
+                            // If status is success but url is missing in expected fields, check more
+                            console.warn("Task success but URL missing in primary fields", task);
+                        }
                         const resultData = {
                             url,
                             type: activeTab,
@@ -159,8 +163,8 @@ const Editor = () => {
                     } else if (task.status === 'failed' || task.status === 'error') {
                         throw new Error(task.error || 'Ошибка во время генерации.');
                     } else {
-                        // Continue polling
-                        setTimeout(pollStatus, 3000);
+                        // Continue polling - backend says 5 seconds in docs
+                        setTimeout(pollStatus, 4000);
                     }
                 } catch (pollErr) {
                     setError(pollErr.message || 'Ошибка проверки статуса.');
@@ -353,21 +357,7 @@ const Editor = () => {
                                 ) : (
                                     /* Video Settings for Veo 3.1 */
                                     <div className="space-y-6 mb-10">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Длительность</label>
-                                                <div className="flex bg-slate-50 p-1 rounded-xl">
-                                                    {[5, 10].map(d => (
-                                                        <button
-                                                            key={d}
-                                                            onClick={() => setDuration(d)}
-                                                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${duration === d ? 'bg-white text-[#6366f1] shadow-sm' : 'text-slate-400'}`}
-                                                        >
-                                                            {d} сек
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
+                                        <div className="grid grid-cols-1 gap-4">
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Формат</label>
                                                 <div className="flex bg-slate-50 p-1 rounded-xl">
@@ -485,7 +475,7 @@ const Editor = () => {
                     </section>
 
                     {/* Image-to-Video / Reference Section */}
-                    {activeTab === 'video' && (
+                    {(activeTab === 'video' || activeTab === 'image') && (
                         <section
                             onClick={() => fileInputRef.current?.click()}
                             className="bg-slate-50 border-2 border-dashed border-slate-200 p-6 rounded-3xl group hover:border-[#6366f1] transition-all cursor-pointer overflow-hidden relative"
