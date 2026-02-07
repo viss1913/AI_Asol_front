@@ -11,7 +11,8 @@ const Editor = () => {
     const { updateBalance } = useUser();
     const [activeTab, setActiveTab] = useState('image'); // 'image' or 'video' or 'history'
     const [prompt, setPrompt] = useState('');
-    const [model, setModel] = useState('z-image');
+    const [model, setModel] = useState('google/nano-banana');
+    const [is4K, setIs4K] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [result, setResult] = useState(null); // { url: string, type: 'image' | 'video' }
     const [error, setError] = useState(null);
@@ -102,18 +103,33 @@ const Editor = () => {
         try {
             let data;
             if (activeTab === 'image') {
-                data = await contentService.generateImage(prompt, model, selectedProjectId || undefined);
+                const finalModel = imageUrl ? 'google/nano-banana-edit' : model;
+                const imageParams = {
+                    prompt,
+                    model: finalModel,
+                    projectId: selectedProjectId || undefined,
+                    aspect_ratio: aspectRatio,
+                    image_url: imageUrl || undefined
+                };
+
+                if (model === 'nano-banana-pro' && is4K) {
+                    imageParams.resolution = "4k";
+                    imageParams.is_4k = true;
+                }
+
+                data = await contentService.generateImage(imageParams);
                 const url = data.result?.[0] || data.image_url || data.url;
                 if (url) {
-                    const resultData = { url, type: 'image', prompt, timestamp: Date.now(), projectId: selectedProjectId };
+                    const resultData = { url, type: 'image', prompt, timestamp: Date.now(), cost: data.cost, projectId: selectedProjectId };
                     setResult(resultData);
                     saveToHistory(resultData);
                 } else {
                     throw new Error('API вернул пустой результат.');
                 }
             } else {
+                const videoModel = fastMode ? 'veo3_fast' : 'veo3';
                 data = await contentService.generateVideo({
-                    model: "veo-3.1",
+                    model: videoModel,
                     prompt,
                     image_urls: imageUrl ? [imageUrl] : undefined,
                     duration: String(duration),
@@ -147,7 +163,8 @@ const Editor = () => {
         }
     };
 
-    const videoCost = duration * (audio ? 200 : 100);
+    const videoCost = fastMode ? 65 : 130; // 65 for fast, assuming ~130 for quality
+    const imageCost = model === 'nano-banana-pro' && is4K ? 30 : 25;
 
     return (
         <div className="max-w-7xl mx-auto px-6 pt-32 pb-12 min-h-screen">
@@ -262,21 +279,38 @@ const Editor = () => {
                                         <label className="text-sm font-bold text-slate-500 uppercase tracking-widest block">Модель ИИ</label>
                                         <div className="grid grid-cols-1 gap-3">
                                             {[
-                                                { id: 'z-image', name: 'Z-Image v2', desc: 'Фотореализм и детализация' },
-                                                { id: 'gemini-flash-image', name: 'Gemini Flash', desc: 'Мгновенная генерация' }
+                                                { id: 'google/nano-banana', name: 'Nano Banana', desc: 'Стандартная генерация' },
+                                                { id: 'nano-banana-pro', name: 'Banana Pro', desc: 'Максимальное качество и 4K' }
                                             ].map(m => (
-                                                <button
-                                                    key={m.id}
-                                                    onClick={() => setModel(m.id)}
-                                                    className={`p-4 rounded-2xl border transition-all text-left flex items-center justify-between ${model === m.id ? 'border-[#6366f1] bg-[#6366f1]/5 ring-1 ring-[#6366f1]' : 'border-slate-100 hover:border-slate-300'
-                                                        }`}
-                                                >
-                                                    <div>
-                                                        <p className={`font-bold ${model === m.id ? 'text-[#6366f1]' : 'text-slate-800'}`}>{m.name}</p>
-                                                        <p className="text-xs text-slate-500 font-medium">{m.desc}</p>
-                                                    </div>
-                                                    {model === m.id && <Sparkles size={18} className="text-[#6366f1]" />}
-                                                </button>
+                                                <div key={m.id} className="space-y-3">
+                                                    <button
+                                                        onClick={() => setModel(m.id)}
+                                                        className={`w-full p-4 rounded-2xl border transition-all text-left flex items-center justify-between ${model === m.id ? 'border-[#6366f1] bg-[#6366f1]/5 ring-1 ring-[#6366f1]' : 'border-slate-100 hover:border-slate-300'
+                                                            }`}
+                                                    >
+                                                        <div>
+                                                            <p className={`font-bold ${model === m.id ? 'text-[#6366f1]' : 'text-slate-800'}`}>{m.name}</p>
+                                                            <p className="text-xs text-slate-500 font-medium">{m.desc}</p>
+                                                        </div>
+                                                        {model === m.id && <Sparkles size={18} className="text-[#6366f1]" />}
+                                                    </button>
+
+                                                    {model === 'nano-banana-pro' && m.id === 'nano-banana-pro' && (
+                                                        <motion.div
+                                                            initial={{ opacity: 0, y: -10 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            className="flex items-center justify-between p-3 bg-indigo-50/50 rounded-xl border border-indigo-100"
+                                                        >
+                                                            <span className="text-xs font-bold text-slate-600">Включить 4K разрешение</span>
+                                                            <button
+                                                                onClick={() => setIs4K(!is4K)}
+                                                                className={`w-10 h-5 rounded-full transition-all relative ${is4K ? 'bg-indigo-500' : 'bg-slate-300'}`}
+                                                            >
+                                                                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${is4K ? 'left-5.5' : 'left-0.5'}`} />
+                                                            </button>
+                                                        </motion.div>
+                                                    )}
+                                                </div>
                                             ))}
                                         </div>
                                     </div>
@@ -352,7 +386,7 @@ const Editor = () => {
 
                                         <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-center justify-between">
                                             <span className="text-xs font-bold text-indigo-600">Стоимость генерации:</span>
-                                            <span className="text-sm font-black text-indigo-700">{videoCost} ₽</span>
+                                            <span className="text-sm font-black text-indigo-700">{activeTab === 'image' ? imageCost : videoCost} ₽</span>
                                         </div>
                                     </div>
                                 )}

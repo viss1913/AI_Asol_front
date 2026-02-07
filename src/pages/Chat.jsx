@@ -18,6 +18,7 @@ const Chat = () => {
     const [selectedProjectId, setSelectedProjectId] = useState('');
     const [isCreatingProject, setIsCreatingProject] = useState(false);
     const [newProjectTitle, setNewProjectTitle] = useState('');
+    const [chatModel, setChatModel] = useState('gemini-3-flash');
 
     const messagesEndRef = useRef(null);
 
@@ -113,7 +114,7 @@ const Chat = () => {
         setLoading(true);
 
         try {
-            const data = await chatService.sendMessage(input, currentChatId, selectedProjectId || undefined);
+            const data = await chatService.sendMessage(input, currentChatId, selectedProjectId || undefined, chatModel);
 
             if (data.newBalance !== undefined) {
                 updateBalance(data.newBalance);
@@ -286,6 +287,17 @@ const Chat = () => {
                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             </div>
                             <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">AI Assistant</span>
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                            <select
+                                value={chatModel}
+                                onChange={(e) => setChatModel(e.target.value)}
+                                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1 text-xs font-bold text-slate-600 outline-none cursor-pointer focus:border-indigo-500 transition-all"
+                            >
+                                <option value="gemini-3-flash">Gemini 3 Flash</option>
+                                <option value="gemini-3-pro">Gemini 3 Pro</option>
+                            </select>
                         </div>
                     </div>
                 </div>

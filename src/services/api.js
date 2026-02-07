@@ -49,8 +49,8 @@ export const projectService = {
 };
 
 export const contentService = {
-    generateImage: async (prompt, model, projectId) => {
-        const response = await api.post('/images/generate', { prompt, model, projectId });
+    generateImage: async (imageData) => {
+        const response = await api.post('/images/generate', imageData);
         return response.data;
     },
     editImage: async (prompt, model, imageUrl, projectId) => {
@@ -75,8 +75,8 @@ export const contentService = {
 };
 
 export const chatService = {
-    sendMessage: async (message, chatId, projectId) => {
-        const response = await api.post('/chat/send', { message, chatId, projectId });
+    sendMessage: async (message, chatId, projectId, model) => {
+        const response = await api.post('/chat/send', { message, chatId, projectId, model });
         return response.data;
     },
     getChats: async () => {
