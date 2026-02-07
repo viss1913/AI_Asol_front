@@ -48,6 +48,13 @@ export const projectService = {
     },
 };
 
+export const historyService = {
+    getTaskStatus: async (taskId) => {
+        const response = await api.get(`/history/${taskId}`);
+        return response.data;
+    },
+};
+
 export const contentService = {
     generateImage: async (imageData) => {
         const response = await api.post('/images/generate', imageData);

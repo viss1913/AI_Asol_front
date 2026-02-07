@@ -30,5 +30,43 @@
 - Nano Banana Pro (4K): ~30 RUB.
 - Gemini 3: Расчет по токенам (0.2 - 0.5 RUB за средний диалог).
 
-## 4. Обработка Баланса
-Бэкенд возвращает `"cost"` в ответе после каждой генерации. Убедитесь, что фронтенд обновляет локальное состояние баланса пользователя, вычитая это значение.
+## 5. Асинхронный режим (ВАЖНО)
+Чтобы избежать тайм-аутов при генерации видео (которая может длиться до 1-2 минут), бэкенд переведен в **асинхронный режим**.
+
+### Как теперь работает генерация (Video/Image):
+1.  Фронтенд отправляет `POST /api/v1/videos/generate`.
+2.  Бэкенд **мгновенно** возвращает ID задачи в БД:
+    ```json
+    {
+      "id": 125,
+      "status": "processing",
+      "message": "Генерация начата"
+    }
+    ```
+3.  Фронтенд должен запустить цикл опроса (polling) для этого ID.
+
+### Новый эндпоинт статуса:
+`GET /api/v1/history/:id`
+
+**Пример логики на фронте:**
+```javascript
+// 1. Запуск
+const startRes = await fetch('/api/v1/videos/generate', { ... });
+const { id } = await startRes.json();
+
+// 2. Опрос каждые 5 секунд
+const poll = setInterval(async () => {
+  const res = await fetch(`/api/v1/history/${id}`);
+  const task = await res.json();
+  
+  if (task.status === 'success') {
+    clearInterval(poll);
+    showVideo(task.resultUrl); // Ссылка на Cloudflare R2
+  } else if (task.status === 'failed' || task.status === 'error') {
+    clearInterval(poll);
+    showError();
+  }
+}, 5000);
+```
+
+Это гарантирует, что пользователь увидит результат, даже если вкладка была неактивна или соединение кратковременно прервалось.

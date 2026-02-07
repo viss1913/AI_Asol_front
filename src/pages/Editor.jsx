@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import { Sparkles, Image as ImageIcon, Video, Wand2, Download, Share2, CornerUpLeft, Upload as UploadIcon, AlertCircle, Clock, Volume2, VolumeX, Maximize2, Zap, Loader2 } from 'lucide-react';
 import Button from '../components/common/Button';
-import { contentService, projectService } from '../services/api';
+import { contentService, projectService, historyService } from '../services/api';
 import { useUser } from '../context/UserContext';
 import { Folder, Plus, CreditCard, X } from 'lucide-react';
 
@@ -100,8 +100,10 @@ const Editor = () => {
         if (!prompt) return;
         setIsGenerating(true);
         setError(null);
+        setResult(null);
+
         try {
-            let data;
+            let initialData;
             if (activeTab === 'image') {
                 const finalModel = imageUrl ? 'google/nano-banana-edit' : model;
                 const imageParams = {
@@ -117,18 +119,10 @@ const Editor = () => {
                     imageParams.is_4k = true;
                 }
 
-                data = await contentService.generateImage(imageParams);
-                const url = data.result?.[0] || data.image_url || data.url;
-                if (url) {
-                    const resultData = { url, type: 'image', prompt, timestamp: Date.now(), cost: data.cost, projectId: selectedProjectId };
-                    setResult(resultData);
-                    saveToHistory(resultData);
-                } else {
-                    throw new Error('API вернул пустой результат.');
-                }
+                initialData = await contentService.generateImage(imageParams);
             } else {
                 const videoModel = fastMode ? 'veo3_fast' : 'veo3';
-                data = await contentService.generateVideo({
+                initialData = await contentService.generateVideo({
                     model: videoModel,
                     prompt,
                     image_urls: imageUrl ? [imageUrl] : undefined,
@@ -138,27 +132,52 @@ const Editor = () => {
                     fast: fastMode,
                     projectId: selectedProjectId || undefined
                 });
-                if (data.resultUrl) {
-                    const resultData = { url: data.resultUrl, type: 'video', prompt, timestamp: Date.now(), cost: data.cost, projectId: selectedProjectId };
-                    setResult(resultData);
-                    saveToHistory(resultData);
-                } else {
-                    throw new Error('API вернул пустой результат.');
-                }
             }
 
-            if (data.newBalance !== undefined) {
-                updateBalance(data.newBalance);
-            }
+            const taskId = initialData.id;
+            if (!taskId) throw new Error('Не удалось получить ID задачи.');
+
+            // Polling loop
+            const pollStatus = async () => {
+                try {
+                    const task = await historyService.getTaskStatus(taskId);
+
+                    if (task.status === 'success' || (task.status === 'completed' && task.resultUrl)) {
+                        const url = task.resultUrl || (task.result?.[0] || task.image_url || task.url);
+                        const resultData = {
+                            url,
+                            type: activeTab,
+                            prompt,
+                            timestamp: Date.now(),
+                            cost: task.cost,
+                            projectId: selectedProjectId
+                        };
+                        setResult(resultData);
+                        saveToHistory(resultData);
+                        if (task.newBalance !== undefined) updateBalance(task.newBalance);
+                        setIsGenerating(false);
+                    } else if (task.status === 'failed' || task.status === 'error') {
+                        throw new Error(task.error || 'Ошибка во время генерации.');
+                    } else {
+                        // Continue polling
+                        setTimeout(pollStatus, 3000);
+                    }
+                } catch (pollErr) {
+                    setError(pollErr.message || 'Ошибка проверки статуса.');
+                    setIsGenerating(false);
+                }
+            };
+
+            setTimeout(pollStatus, 3000);
+
         } catch (err) {
             console.error(err);
             if (err.response?.status === 403 && err.response?.data?.requireTopUp) {
                 setShowTopUpModal(true);
                 setError('⚠️ ' + (err.response.data.error || 'Недостаточно средств. Пожалуйста, пополните баланс.'));
             } else {
-                setError(err.response?.data?.message || err.response?.data?.error || err.message || 'Ошибка генерации. Проверьте подключение к API.');
+                setError(err.response?.data?.message || err.response?.data?.error || err.message || 'Ошибка старта генерации.');
             }
-        } finally {
             setIsGenerating(false);
         }
     };
@@ -274,46 +293,63 @@ const Editor = () => {
                                 </div>
 
                                 {activeTab === 'image' ? (
-                                    /* Model Selection for Images */
-                                    <div className="space-y-4 mb-10">
-                                        <label className="text-sm font-bold text-slate-500 uppercase tracking-widest block">Модель ИИ</label>
-                                        <div className="grid grid-cols-1 gap-3">
-                                            {[
-                                                { id: 'google/nano-banana', name: 'Nano Banana', desc: 'Стандартная генерация' },
-                                                { id: 'nano-banana-pro', name: 'Banana Pro', desc: 'Максимальное качество и 4K' }
-                                            ].map(m => (
-                                                <div key={m.id} className="space-y-3">
-                                                    <button
-                                                        onClick={() => setModel(m.id)}
-                                                        className={`w-full p-4 rounded-2xl border transition-all text-left flex items-center justify-between ${model === m.id ? 'border-[#6366f1] bg-[#6366f1]/5 ring-1 ring-[#6366f1]' : 'border-slate-100 hover:border-slate-300'
-                                                            }`}
-                                                    >
-                                                        <div>
-                                                            <p className={`font-bold ${model === m.id ? 'text-[#6366f1]' : 'text-slate-800'}`}>{m.name}</p>
-                                                            <p className="text-xs text-slate-500 font-medium">{m.desc}</p>
-                                                        </div>
-                                                        {model === m.id && <Sparkles size={18} className="text-[#6366f1]" />}
-                                                    </button>
-
-                                                    {model === 'nano-banana-pro' && m.id === 'nano-banana-pro' && (
-                                                        <motion.div
-                                                            initial={{ opacity: 0, y: -10 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            className="flex items-center justify-between p-3 bg-indigo-50/50 rounded-xl border border-indigo-100"
+                                    <>
+                                        {/* Model Selection for Images */}
+                                        <div className="space-y-4 mb-10">
+                                            <label className="text-sm font-bold text-slate-500 uppercase tracking-widest block">Модель ИИ</label>
+                                            <div className="grid grid-cols-1 gap-3">
+                                                {[
+                                                    { id: 'google/nano-banana', name: 'Nano Banana', desc: 'Стандартная генерация' },
+                                                    { id: 'nano-banana-pro', name: 'Banana Pro', desc: 'Максимальное качество и 4K' }
+                                                ].map(m => (
+                                                    <div key={m.id} className="space-y-3">
+                                                        <button
+                                                            onClick={() => setModel(m.id)}
+                                                            className={`w-full p-4 rounded-2xl border transition-all text-left flex items-center justify-between ${model === m.id ? 'border-[#6366f1] bg-[#6366f1]/5 ring-1 ring-[#6366f1]' : 'border-slate-100 hover:border-slate-300'
+                                                                }`}
                                                         >
-                                                            <span className="text-xs font-bold text-slate-600">Включить 4K разрешение</span>
-                                                            <button
-                                                                onClick={() => setIs4K(!is4K)}
-                                                                className={`w-10 h-5 rounded-full transition-all relative ${is4K ? 'bg-indigo-500' : 'bg-slate-300'}`}
+                                                            <div>
+                                                                <p className={`font-bold ${model === m.id ? 'text-[#6366f1]' : 'text-slate-800'}`}>{m.name}</p>
+                                                                <p className="text-xs text-slate-500 font-medium">{m.desc}</p>
+                                                            </div>
+                                                            {model === m.id && <Sparkles size={18} className="text-[#6366f1]" />}
+                                                        </button>
+
+                                                        {model === 'nano-banana-pro' && m.id === 'nano-banana-pro' && (
+                                                            <motion.div
+                                                                initial={{ opacity: 0, y: -10 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                className="flex items-center justify-between p-3 bg-indigo-50/50 rounded-xl border border-indigo-100"
                                                             >
-                                                                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${is4K ? 'left-5.5' : 'left-0.5'}`} />
-                                                            </button>
-                                                        </motion.div>
-                                                    )}
-                                                </div>
-                                            ))}
+                                                                <span className="text-xs font-bold text-slate-600">Включить 4K разрешение</span>
+                                                                <button
+                                                                    onClick={() => setIs4K(!is4K)}
+                                                                    className={`w-10 h-5 rounded-full transition-all relative ${is4K ? 'bg-indigo-500' : 'bg-slate-300'}`}
+                                                                >
+                                                                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${is4K ? 'left-5.5' : 'left-0.5'}`} />
+                                                                </button>
+                                                            </motion.div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
+
+                                        <div className="space-y-4 mb-10">
+                                            <label className="text-sm font-bold text-slate-500 uppercase tracking-widest block">Соотношение сторон</label>
+                                            <div className="flex bg-slate-50 p-1 rounded-2xl">
+                                                {['1:1', '16:9', '9:16'].map(r => (
+                                                    <button
+                                                        key={r}
+                                                        onClick={() => setAspectRatio(r)}
+                                                        className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${aspectRatio === r ? 'bg-white text-[#6366f1] shadow-sm' : 'text-slate-400'}`}
+                                                    >
+                                                        {r}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>
                                 ) : (
                                     /* Video Settings for Veo 3.1 */
                                     <div className="space-y-6 mb-10">
@@ -467,9 +503,9 @@ const Editor = () => {
                                         {uploading ? <Loader2 size={24} className="animate-spin text-indigo-500" /> : <UploadIcon size={24} />}
                                     </div>
                                     <div>
-                                        <p className="font-bold text-slate-700">Оживить фото</p>
+                                        <p className="font-bold text-slate-700">{activeTab === 'image' ? 'Перекрасить фото' : 'Оживить фото'}</p>
                                         <p className="text-xs text-slate-400 font-medium tracking-tight">
-                                            {uploading ? 'Загрузка...' : 'Image-to-Video режим'}
+                                            {uploading ? 'Загрузка...' : activeTab === 'image' ? 'Image-to-Image режим' : 'Image-to-Video режим'}
                                         </p>
                                     </div>
                                 </div>
