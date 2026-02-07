@@ -57,7 +57,7 @@ const Landing = () => {
                             Экосистема AI Asol
                         </span>
                         <h1 className="text-5xl md:text-7xl font-bold text-slate-900 mb-8 tracking-tight family-outfit leading-tight">
-                            Ваш <span className="bg-accent-gradient bg-clip-text text-transparent italic">Интеллект</span><br /> под Алыми Парусами
+                            Ваш <span className="text-indigo-600 italic font-black">Интеллект</span><br /> под Алыми Парусами
                         </h1>
                         <p className="text-xl text-slate-500 max-w-2xl mx-auto mb-10 font-medium">
                             Добро пожаловать в пространство AI Asol. Мы объединили лучшие инструменты искусственного интеллекта для вашего роста и творчества.

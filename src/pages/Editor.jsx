@@ -134,20 +134,26 @@ const Editor = () => {
                 });
             }
 
+            console.log("Generation response:", initialData);
             const taskId = initialData.id;
-            if (!taskId) throw new Error('Не удалось получить ID задачи.');
+            if (!taskId) {
+                console.error("Task ID missing in response:", initialData);
+                throw new Error('Не удалось получить ID задачи.');
+            }
 
             // Polling loop
             const pollStatus = async () => {
                 try {
                     const task = await historyService.getTaskStatus(taskId);
+                    console.log("Polling task status:", task);
 
-                    if (task.status === 'success' || task.status === 'completed') {
-                        const url = task.resultUrl || task.video_url || task.image_url || (task.result?.[0]) || task.url;
-                        if (!url && task.status === 'success') {
-                            // If status is success but url is missing in expected fields, check more
-                            console.warn("Task success but URL missing in primary fields", task);
+                    if (task.status === 'success') {
+                        const url = task.url || task.resultUrl || task.video_url || task.image_url || (task.result?.[0]);
+
+                        if (!url) {
+                            console.warn("Task success but URL missing in response fields", task);
                         }
+
                         const resultData = {
                             url,
                             type: activeTab,
@@ -156,6 +162,7 @@ const Editor = () => {
                             cost: task.cost,
                             projectId: selectedProjectId
                         };
+
                         setResult(resultData);
                         saveToHistory(resultData);
                         if (task.newBalance !== undefined) updateBalance(task.newBalance);
@@ -163,10 +170,11 @@ const Editor = () => {
                     } else if (task.status === 'failed' || task.status === 'error') {
                         throw new Error(task.error || 'Ошибка во время генерации.');
                     } else {
-                        // Continue polling - backend says 5 seconds in docs
+                        // Continue polling
                         setTimeout(pollStatus, 4000);
                     }
                 } catch (pollErr) {
+                    console.error("Polling error:", pollErr);
                     setError(pollErr.message || 'Ошибка проверки статуса.');
                     setIsGenerating(false);
                 }
