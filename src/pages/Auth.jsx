@@ -1,15 +1,22 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, User, ArrowRight, Sparkles, AlertCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Button from '../components/common/Button';
+import { useUser } from '../context/UserContext';
 import { authService } from '../services/api';
 
 const Auth = () => {
-    const [isLogin, setIsLogin] = useState(true);
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const location = useLocation();
     const navigate = useNavigate();
+    const { login, register } = useUser();
+
+    // Determine mode based on URL, default to login
+    const isRegisterPath = location.pathname === '/register';
+    const [isLogin, setIsLogin] = useState(!isRegisterPath);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -20,17 +27,24 @@ const Auth = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        console.log('Form submitted', { isLogin, formData });
         setLoading(true);
         setError(null);
 
         try {
             if (isLogin) {
-                await authService.login({ email: formData.email, password: formData.password });
+                console.log('Attempting login...');
+                await login({ email: formData.email, password: formData.password });
+                console.log('Login successful');
             } else {
-                await authService.register(formData);
+                console.log('Attempting register...');
+                await register(formData);
+                console.log('Register successful');
             }
+            console.log('Navigating to /');
             navigate('/');
         } catch (err) {
+            console.error('Auth error:', err);
             setError(err.response?.data?.message || 'Что-то пошло не так. Проверьте данные.');
         } finally {
             setLoading(false);
@@ -129,6 +143,18 @@ const Auth = () => {
                             )}
                         </AnimatePresence>
 
+                        {isLogin && (
+                            <div className="text-right">
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/forgot-password')}
+                                    className="text-sm text-slate-400 hover:text-[#6366f1] font-bold transition-colors"
+                                >
+                                    Забыли пароль?
+                                </button>
+                            </div>
+                        )}
+
                         <AnimatePresence>
                             {error && (
                                 <motion.div
@@ -156,7 +182,10 @@ const Auth = () => {
 
                     <div className="mt-8 text-center">
                         <button
-                            onClick={() => setIsLogin(!isLogin)}
+                            onClick={() => {
+                                setIsLogin(!isLogin);
+                                navigate(isLogin ? '/register' : '/login');
+                            }}
                             className="text-slate-400 font-bold hover:text-[#6366f1] transition-colors text-sm uppercase tracking-wider"
                         >
                             {isLogin ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти'}

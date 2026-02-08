@@ -31,6 +31,14 @@ export const authService = {
         const response = await api.get('/auth/me');
         return response.data;
     },
+    forgotPassword: async (email) => {
+        const response = await api.post('/auth/forgot-password', { email });
+        return response.data;
+    },
+    resetPassword: async (token, newPassword) => {
+        const response = await api.post('/auth/reset-password', { token, newPassword });
+        return response.data;
+    },
 };
 
 export const projectService = {
@@ -97,6 +105,31 @@ export const chatService = {
     deleteChat: async (chatId) => {
         const response = await api.delete(`/chat/${chatId}`);
         return response.data;
+    },
+};
+
+export const paymentService = {
+    initPayment: async (amount) => {
+        const response = await api.post('/payments/init', { amount });
+        return response.data; // { paymentUrl, paymentId }
+    },
+};
+
+export const audioService = {
+    getVoices: async () => {
+        const response = await api.get('/audio/voices');
+        return response.data;
+    },
+    generateAudio: async (audioData) => {
+        const response = await api.post('/audio/elevenlabs', audioData);
+        return response.data;
+    },
+};
+
+export const configService = {
+    calculateCost: async (model, options = {}) => {
+        const response = await api.post('/config/calculate', { model, options });
+        return response.data; // { cost: 630 }
     },
 };
 

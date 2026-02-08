@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { chatService, projectService } from '../services/api';
 import { useUser } from '../context/UserContext';
 import { Send, User, Bot, Sparkles, MessageSquare, Plus, Loader2, ChevronLeft, Trash2, Folder, X } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import avatarBase from '../assets/avatar.png';
 
 const Chat = () => {
@@ -14,10 +16,7 @@ const Chat = () => {
     const [loading, setLoading] = useState(false);
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [projects, setProjects] = useState([]);
-    const [selectedProjectId, setSelectedProjectId] = useState('');
-    const [isCreatingProject, setIsCreatingProject] = useState(false);
-    const [newProjectTitle, setNewProjectTitle] = useState('');
+
     const [chatModel, setChatModel] = useState('gemini-3-flash');
 
     const messagesEndRef = useRef(null);
@@ -32,31 +31,10 @@ const Chat = () => {
 
     useEffect(() => {
         loadChats();
-        fetchProjects();
+
     }, []);
 
-    const fetchProjects = async () => {
-        try {
-            const data = await projectService.list();
-            setProjects(data || []);
-        } catch (err) {
-            console.error("Failed to fetch projects:", err);
-        }
-    };
 
-    const handleCreateProject = async (e) => {
-        e.preventDefault();
-        if (!newProjectTitle.trim()) return;
-        try {
-            const project = await projectService.create({ title: newProjectTitle });
-            setProjects([project, ...projects]);
-            setSelectedProjectId(project.id);
-            setNewProjectTitle('');
-            setIsCreatingProject(false);
-        } catch (err) {
-            console.error("Failed to create project:", err);
-        }
-    };
 
     const loadChats = async () => {
         try {
@@ -72,7 +50,8 @@ const Chat = () => {
         setCurrentChatId(chatId);
         try {
             const data = await chatService.getChatHistory(chatId);
-            setMessages(data.map(m => ({
+            const messagesList = data.messages || (Array.isArray(data) ? data : []);
+            setMessages(messagesList.map(m => ({
                 id: m.id,
                 role: m.role,
                 content: m.content,
@@ -114,7 +93,7 @@ const Chat = () => {
         setLoading(true);
 
         try {
-            const data = await chatService.sendMessage(input, currentChatId, selectedProjectId || undefined, chatModel);
+            const data = await chatService.sendMessage(input, currentChatId, undefined, chatModel);
 
             if (data.newBalance !== undefined) {
                 updateBalance(data.newBalance);
@@ -171,49 +150,7 @@ const Chat = () => {
                         <span className="text-sm">Новый чат</span>
                     </button>
 
-                    {/* Project Selector in Sidebar */}
-                    <div className="p-3 bg-white border border-slate-100 rounded-xl">
-                        <div className="flex items-center justify-between mb-2">
-                            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                <Folder size={10} />
-                                Проект
-                            </label>
-                            {!isCreatingProject && (
-                                <button
-                                    onClick={() => setIsCreatingProject(true)}
-                                    className="text-[9px] font-bold text-indigo-600 hover:underline flex items-center gap-0.5"
-                                >
-                                    <Plus size={8} />
-                                    Создать
-                                </button>
-                            )}
-                        </div>
 
-                        {isCreatingProject ? (
-                            <form onSubmit={handleCreateProject} className="flex gap-1">
-                                <input
-                                    autoFocus
-                                    value={newProjectTitle}
-                                    onChange={(e) => setNewProjectTitle(e.target.value)}
-                                    placeholder="..."
-                                    className="flex-1 bg-slate-50 border border-indigo-50 rounded-lg px-2 py-1 text-[11px] outline-none"
-                                />
-                                <button type="submit" className="text-indigo-600"><Plus size={14} /></button>
-                                <button onClick={() => setIsCreatingProject(false)} className="text-slate-400"><X size={14} /></button>
-                            </form>
-                        ) : (
-                            <select
-                                value={selectedProjectId}
-                                onChange={(e) => setSelectedProjectId(e.target.value)}
-                                className="w-full bg-slate-50 border-none rounded-lg px-2 py-1.5 text-[11px] font-bold text-slate-600 outline-none cursor-pointer"
-                            >
-                                <option value="">Без проекта</option>
-                                {projects.map(p => (
-                                    <option key={p.id} value={p.id}>{p.title}</option>
-                                ))}
-                            </select>
-                        )}
-                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-1.5 scrollbar-hide">
@@ -247,9 +184,16 @@ const Chat = () => {
                                     <MessageSquare size={14} className={currentChatId === chat.id ? 'text-white' : 'text-slate-400 group-hover:text-indigo-500'} />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <span className="font-bold text-sm block truncate leading-tight">{chat.title || 'Новый диалог'}</span>
-                                    <span className={`text-[9px] block uppercase tracking-wider font-bold mt-0.5 ${currentChatId === chat.id ? 'text-indigo-300' : 'text-slate-300'}`}>
-                                        {chat.createdAt ? new Date(chat.createdAt).toLocaleDateString() : 'Недавно'}
+                                    <div className="flex justify-between items-baseline">
+                                        <span className="font-bold text-sm block truncate leading-tight">{chat.title || 'Новый диалог'}</span>
+                                        {chat.updatedAt && (
+                                            <span className={`text-[9px] font-bold ${currentChatId === chat.id ? 'text-indigo-300' : 'text-slate-300'}`}>
+                                                {new Date(chat.updatedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'numeric' })}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <span className={`text-[10px] block truncate font-medium mt-0.5 ${currentChatId === chat.id ? 'text-indigo-200' : 'text-slate-400'}`}>
+                                        {chat.messages?.[0]?.content || 'Нет сообщений'}
                                     </span>
                                 </div>
 
@@ -339,21 +283,27 @@ const Chat = () => {
                                     animate={{ opacity: 1, y: 0 }}
                                     className={`flex gap-3 md:gap-5 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
                                 >
-                                    <div className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm overflow-hidden border border-slate-100 ${msg.role === 'user' ? 'bg-slate-900 text-white' : 'bg-white'}`}>
+                                    <div className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm overflow-hidden border border-slate-100 ${msg.role === 'user' ? 'bg-slate-100 text-slate-900' : 'bg-white'}`}>
                                         {msg.role === 'user' ? <User size={18} /> : <img src={avatarBase} alt="Asol" className="w-full h-full object-cover" />}
                                     </div>
                                     <div className={`flex flex-col max-w-[85%] md:max-w-[70%] gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                                        <div className={`px-5 md:px-6 py-3 md:py-4 rounded-2xl text-[14px] md:text-[15px] font-bold leading-relaxed shadow-sm ${msg.role === 'user'
-                                            ? 'bg-slate-900 text-white rounded-tr-none'
-                                            : 'bg-white text-slate-800 border border-slate-100 rounded-tl-none'
+                                        <div className={`px-5 md:px-6 py-3 md:py-4 rounded-2xl text-[14px] md:text-[15px] leading-relaxed shadow-sm relative group ${msg.role === 'user'
+                                            ? 'bg-slate-100 text-slate-900 rounded-tr-none font-medium'
+                                            : 'bg-white text-slate-800 border border-slate-100 rounded-tl-none font-normal'
                                             }`}>
                                             <p className="whitespace-pre-wrap">{msg.content}</p>
+
+                                            <button
+                                                onClick={() => navigator.clipboard.writeText(msg.content)}
+                                                className={`absolute -bottom-6 ${msg.role === 'user' ? 'right-0' : 'left-0'} opacity-0 group-hover:opacity-100 transition-opacity p-1 text-slate-400 hover:text-indigo-600`}
+                                                title="Копировать"
+                                            >
+                                                <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-white border border-slate-100 px-2 py-1 rounded-md shadow-sm">
+                                                    <span className="sr-only">Копировать</span>
+                                                    Copy
+                                                </div>
+                                            </button>
                                         </div>
-                                        {msg.cost > 0 && (
-                                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-300 px-1 mt-1">
-                                                {msg.cost.toFixed(3)} ₽
-                                            </span>
-                                        )}
                                     </div>
                                 </motion.div>
                             ))}

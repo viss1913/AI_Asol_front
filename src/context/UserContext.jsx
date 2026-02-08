@@ -41,8 +41,32 @@ export const UserProvider = ({ children }) => {
         setBalance(newBalance);
     };
 
+    const login = async (credentials) => {
+        const data = await authService.login(credentials);
+        if (data.token) {
+            localStorage.setItem('token', data.token);
+            await refreshProfile();
+        }
+        return data;
+    };
+
+    const register = async (userData) => {
+        const data = await authService.register(userData);
+        if (data.token) {
+            localStorage.setItem('token', data.token);
+            await refreshProfile();
+        }
+        return data;
+    };
+
+    const logout = () => {
+        localStorage.removeItem('token');
+        setUser(null);
+        setBalance(0);
+    };
+
     return (
-        <UserContext.Provider value={{ user, balance, loading, refreshProfile, updateBalance }}>
+        <UserContext.Provider value={{ user, balance, loading, refreshProfile, updateBalance, logout, login, register }}>
             {children}
         </UserContext.Provider>
     );
