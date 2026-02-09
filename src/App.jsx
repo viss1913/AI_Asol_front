@@ -11,7 +11,8 @@ import Chat from './pages/Chat';
 import VideoGeneration from './pages/VideoGeneration';
 import ImageGeneration from './pages/ImageGeneration';
 import AudioGeneration from './pages/AudioGeneration';
-
+import Footer from './components/layout/Footer';
+import CookieConsent from './components/common/CookieConsent';
 import Dashboard from './pages/Dashboard';
 
 import { useUser } from './context/UserContext';
@@ -114,18 +115,8 @@ function App() {
         </Routes>
       </main>
 
-      {!isChat && (
-        <footer className="py-4 px-6 border-t border-slate-100 mt-6 bg-white">
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="text-sm font-bold tracking-tight family-outfit text-slate-400">
-              AI Asol
-            </div>
-            <p className="text-slate-400 text-xs font-medium">
-              &copy; 2026 AI Asol. Все инструменты в одном месте.
-            </p>
-          </div>
-        </footer>
-      )}
+      {!isChat && <Footer />}
+      <CookieConsent />
     </div>
   );
 }

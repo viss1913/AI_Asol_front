@@ -5,11 +5,13 @@ import { Sparkles, Image as ImageIcon, Video, Wand2, Download, Share2, CornerUpL
 import Button from '../components/common/Button';
 import { contentService, projectService, historyService, configService } from '../services/api';
 import { useUser } from '../context/UserContext';
+import { useTasks } from '../context/TaskContext';
 import { Folder, Plus, CreditCard, X } from 'lucide-react';
 
 const Editor = ({ defaultTab }) => {
     const { updateBalance } = useUser();
     const [activeTab, setActiveTab] = useState(defaultTab || 'image'); // 'image' or 'video' or 'history'
+    const { tasks, addTask } = useTasks();
     const [prompt, setPrompt] = useState('');
     const [model, setModel] = useState('google/nano-banana');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -45,23 +47,32 @@ const Editor = ({ defaultTab }) => {
     useEffect(() => {
         const fetchCost = async () => {
             try {
-                if (videoModel === 'sora-2-pro') {
-                    const { cost } = await configService.calculateCost(videoModel, {
-                        duration: soraDuration,
-                        quality: soraQuality
-                    });
-                    setVideoCost(cost);
-                } else {
-                    // Fixed prices for Veo models
-                    const prices = { veo3: 250, veo3_fast: 65 };
-                    setVideoCost(prices[videoModel]);
-                }
+                const options = videoModel === 'sora-2-pro' ? {
+                    duration: soraDuration,
+                    quality: soraQuality
+                } : { duration: "8" };
+
+                const data = await configService.calculateCost(videoModel, options);
+                setVideoCost(data.cost || (videoModel === 'veo3' ? 250 : videoModel === 'veo3_fast' ? 65 : 150));
             } catch (error) {
-                console.error('Cost calculation error:', error);
+                console.error('Video cost calculation error:', error);
             }
         };
         fetchCost();
     }, [videoModel, soraDuration, soraQuality]);
+
+    // Calculate image cost when model changes
+    useEffect(() => {
+        const fetchCost = async () => {
+            try {
+                const data = await configService.calculateCost(model);
+                setImageCost(data.cost || (model === 'google/nano-banana' ? 0.35 : 0.85));
+            } catch (error) {
+                console.error('Image cost calculation error:', error);
+            }
+        };
+        fetchCost();
+    }, [model]);
 
     useEffect(() => {
         fetchProjects();
@@ -133,7 +144,7 @@ const Editor = ({ defaultTab }) => {
         if (!prompt) return;
         setIsGenerating(true);
         setError(null);
-        setResult(null);
+        // We don't clear the result here, we just add a new task to the background
 
         try {
             let initialData;
@@ -146,8 +157,6 @@ const Editor = ({ defaultTab }) => {
                     aspect_ratio: aspectRatio,
                     image_url: imageUrl || undefined
                 };
-
-
                 initialData = await contentService.generateImage(imageParams);
             } else {
                 const videoParams = {
@@ -160,64 +169,35 @@ const Editor = ({ defaultTab }) => {
                     projectId: selectedProjectId || undefined
                 };
 
-                // Add Sora-specific parameters
                 if (videoModel === 'sora-2-pro') {
                     videoParams.duration = soraDuration;
                     videoParams.quality = soraQuality;
                 } else {
-                    videoParams.duration = "8"; // Default for Veo
+                    videoParams.duration = "8";
                 }
 
                 initialData = await contentService.generateVideo(videoParams);
             }
 
-            console.log("Generation response:", initialData);
             const taskId = initialData.id;
             if (!taskId) {
-                console.error("Task ID missing in response:", initialData);
                 throw new Error('Не удалось получить ID задачи.');
             }
 
-            // Polling loop
-            const pollStatus = async () => {
-                try {
-                    const task = await historyService.getTaskStatus(taskId);
-                    console.log("Polling task status:", task);
+            // Fire and forget: add to global task context
+            addTask({
+                id: taskId,
+                type: activeTab,
+                prompt,
+                model: activeTab === 'image' ? model : videoModel,
+                cost: activeTab === 'image' ? imageCost : videoCost,
+                projectId: selectedProjectId
+            });
 
-                    if (task.status === 'success') {
-                        const url = task.url || task.resultUrl || task.video_url || task.image_url || (task.result?.[0]);
-
-                        if (!url) {
-                            console.warn("Task success but URL missing in response fields", task);
-                        }
-
-                        const resultData = {
-                            url,
-                            type: activeTab,
-                            prompt,
-                            timestamp: Date.now(),
-                            cost: task.cost,
-                            projectId: selectedProjectId
-                        };
-
-                        setResult(resultData);
-                        saveToHistory(resultData);
-                        if (task.newBalance !== undefined) updateBalance(task.newBalance);
-                        setIsGenerating(false);
-                    } else if (task.status === 'failed' || task.status === 'error') {
-                        throw new Error(task.error || 'Ошибка во время генерации.');
-                    } else {
-                        // Continue polling
-                        setTimeout(pollStatus, 4000);
-                    }
-                } catch (pollErr) {
-                    console.error("Polling error:", pollErr);
-                    setError(pollErr.message || 'Ошибка проверки статуса.');
-                    setIsGenerating(false);
-                }
-            };
-
-            setTimeout(pollStatus, 3000);
+            // Fast feedback and reset UI for next generation
+            setIsGenerating(false);
+            setPrompt(''); // Clear prompt for next one if user wants
+            // We don't switch tab or block anything
 
         } catch (err) {
             console.error(err);
@@ -248,17 +228,16 @@ const Editor = ({ defaultTab }) => {
                                 <div className="space-y-3 mb-6">
                                     <div className="grid grid-cols-3 gap-1.5">
                                         {[
-                                            { id: 'veo3', name: 'Veo 3 Quality', price: '250', color: 'bg-indigo-600' },
-                                            { id: 'veo3_fast', name: 'Veo 3 Fast', price: '65', color: 'bg-amber-600' },
-                                            { id: 'sora-2-pro', name: 'Sora 2 Pro', price: 'от 150', color: 'bg-purple-600' }
+                                            { id: 'veo3', name: 'Veo 3 Quality', color: 'bg-indigo-600' },
+                                            { id: 'veo3_fast', name: 'Veo 3 Fast', color: 'bg-amber-600' },
+                                            { id: 'sora-2-pro', name: 'Sora 2 Pro', color: 'bg-purple-600' }
                                         ].map(m => (
                                             <button
                                                 key={m.id}
                                                 onClick={() => setVideoModel(m.id)}
-                                                className={`py-1.5 px-0.5 rounded-xl text-center transition-all ${videoModel === m.id ? `${m.color} text-white shadow-lg` : 'bg-slate-50 text-slate-700 hover:bg-slate-100'}`}
+                                                className={`py-3 px-0.5 rounded-xl text-center transition-all ${videoModel === m.id ? `${m.color} text-white shadow-lg` : 'bg-slate-50 text-slate-700 hover:bg-slate-100'}`}
                                             >
                                                 <p className="text-[10px] font-bold leading-tight">{m.name}</p>
-                                                <p className="text-[8px] opacity-70 font-bold">{m.price}₽</p>
                                             </button>
                                         ))}
                                     </div>
@@ -558,147 +537,174 @@ const Editor = ({ defaultTab }) => {
                         )}
                     </div>
 
-                    {/* Right Column: Preview Area */}
+                    {/* Right Column: Preview Area & Queue */}
                     <div className="lg:col-span-6">
                         <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl h-full min-h-[600px] flex flex-col overflow-hidden sticky top-32">
                             <div className="p-6 border-b border-slate-50 flex items-center justify-between">
                                 <div className="flex flex-col">
-                                    <span className="text-sm font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">Предпросмотр</span>
-                                    {result && <span className="text-[10px] font-bold text-indigo-500 uppercase">{result.type === 'video' ? 'Veo 3.1 Video' : 'AI Image'}</span>}
+                                    <span className="text-sm font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">Генерации</span>
+                                    <span className="text-[10px] font-bold text-indigo-500 uppercase">Очередь и результат</span>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    {result && (
-                                        <>
-                                            <button className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-slate-900 transition-all">
-                                                <Share2 size={18} />
-                                            </button>
-                                            <button
-                                                onClick={async () => {
-                                                    try {
-                                                        const response = await fetch(result.url);
-                                                        const blob = await response.blob();
-                                                        const url = window.URL.createObjectURL(blob);
-                                                        const link = document.createElement('a');
-                                                        link.href = url;
-                                                        link.download = `asol-creation-${Date.now()}.${result.type === 'video' ? 'mp4' : 'png'}`;
-                                                        document.body.appendChild(link);
-                                                        link.click();
-                                                        document.body.removeChild(link);
-                                                        window.URL.revokeObjectURL(url);
-                                                    } catch (err) {
-                                                        console.error("Failed to download:", err);
-                                                        window.open(result.url, '_blank');
-                                                    }
-                                                }}
-                                                className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-slate-900 transition-all"
-                                                title="Скачать на устройство"
-                                            >
-                                                <Download size={18} />
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
+                                {result && (
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => {
+                                                if (navigator.share) {
+                                                    navigator.share({ title: 'AI Asol Creation', url: result.url });
+                                                }
+                                            }}
+                                            className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-slate-900 transition-all"
+                                        >
+                                            <Share2 size={18} />
+                                        </button>
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const response = await fetch(result.url);
+                                                    const blob = await response.blob();
+                                                    const url = window.URL.createObjectURL(blob);
+                                                    const link = document.createElement('a');
+                                                    link.href = url;
+                                                    link.download = `asol-${Date.now()}.${result.type === 'video' ? 'mp4' : 'png'}`;
+                                                    document.body.appendChild(link);
+                                                    link.click();
+                                                    document.body.removeChild(link);
+                                                    window.URL.revokeObjectURL(url);
+                                                } catch (err) {
+                                                    window.open(result.url, '_blank');
+                                                }
+                                            }}
+                                            className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-slate-900 transition-all"
+                                        >
+                                            <Download size={18} />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
 
-                            <div className="flex-1 bg-slate-50 m-4 rounded-[1.5rem] flex items-center justify-center relative overflow-hidden group/preview">
-                                <AnimatePresence mode="wait">
-                                    {isGenerating ? (
-                                        <motion.div
-                                            key="loader"
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            exit={{ opacity: 0 }}
-                                            className="flex flex-col items-center gap-6"
-                                        >
-                                            <div className="relative">
+                            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
+                                {/* Active Tasks (Queue) */}
+                                {tasks.length > 0 && (
+                                    <div className="grid grid-cols-2 gap-3 mb-6">
+                                        <AnimatePresence>
+                                            {tasks.map((task) => (
                                                 <motion.div
-                                                    animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.3, 0.1] }}
-                                                    transition={{ repeat: Infinity, duration: 2 }}
-                                                    className="absolute -inset-8 bg-indigo-500 rounded-full blur-3xl"
-                                                />
-                                                <div className="w-20 h-20 border-4 border-indigo-100 rounded-full" />
-                                                <div className="w-20 h-20 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin absolute top-0" />
-                                                <div className="absolute inset-0 flex items-center justify-center">
-                                                    <Sparkles className="text-indigo-600 animate-pulse" size={30} />
-                                                </div>
-                                            </div>
-                                            <div className="text-center">
-                                                <p className="text-slate-800 font-black text-lg mb-1">{activeTab === 'video' ? 'Рендерим видео...' : 'Генерируем шедевр...'}</p>
-                                                <p className="text-slate-400 text-sm font-medium">Это может занять до 5 минут. Пожалуйста, не закрывайте вкладку.</p>
-                                            </div>
-                                        </motion.div>
-                                    ) : error ? (
+                                                    key={task.id}
+                                                    initial={{ opacity: 0, scale: 0.9 }}
+                                                    animate={{ opacity: 1, scale: 1 }}
+                                                    exit={{ opacity: 0, scale: 0.9 }}
+                                                    onClick={() => {
+                                                        if (task.status === 'success') {
+                                                            setResult({ url: task.url, type: task.type, prompt: task.prompt });
+                                                        }
+                                                    }}
+                                                    className={`p-3 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${task.status === 'success'
+                                                        ? (result?.url === task.url ? 'bg-white border-indigo-500 ring-2 ring-indigo-500/20' : 'bg-white border-slate-100 shadow-sm hover:border-indigo-300')
+                                                        : task.status === 'failed' ? 'bg-red-50/50 border-red-100' : 'bg-white/80 border-slate-100 border-dashed animate-pulse'
+                                                        }`}
+                                                >
+                                                    <div className="flex flex-col h-full gap-2">
+                                                        <div className="relative aspect-video rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center">
+                                                            {task.status === 'success' ? (
+                                                                task.type === 'video' ? (
+                                                                    <video
+                                                                        src={task.url}
+                                                                        className="w-full h-full object-cover"
+                                                                        preload="metadata"
+                                                                        onMouseOver={(e) => e.target.play()}
+                                                                        onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
+                                                                        muted
+                                                                    />
+                                                                ) : (
+                                                                    <img src={task.url} alt="" className="w-full h-full object-cover" />
+                                                                )
+                                                            ) : task.status === 'failed' ? (
+                                                                <AlertCircle className="text-red-400" size={24} />
+                                                            ) : (
+                                                                <div className="flex flex-col items-center gap-2">
+                                                                    <Loader2 className="animate-spin text-indigo-500" size={20} />
+                                                                    <span className="text-[8px] font-black text-slate-400 uppercase">Готовим...</span>
+                                                                </div>
+                                                            )}
+
+                                                            {task.status === 'success' && (
+                                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
+                                                                    <Maximize2 className="text-white opacity-0 group-hover:opacity-100" size={20} />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center justify-between mb-0.5">
+                                                                <span className="text-[8px] font-black text-indigo-500 uppercase">{task.type === 'video' ? 'Видео' : 'Фото'}</span>
+                                                                {task.status === 'processing' && (
+                                                                    <span className="text-[8px] font-bold text-amber-500 animate-pulse">В процессе</span>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-[10px] font-bold text-slate-700 truncate">{task.prompt}</p>
+                                                            {task.status === 'failed' && (
+                                                                <p className="text-[8px] font-medium text-red-500 truncate mt-0.5">{task.error || 'Ошибка'}</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Progress bar overlay for processing */}
+                                                    {task.status === 'processing' && (
+                                                        <div className="absolute bottom-0 left-0 h-0.5 bg-indigo-500 animate-progress transition-all" style={{ width: '100%' }} />
+                                                    )}
+                                                </motion.div>
+                                            ))}
+                                        </AnimatePresence>
+                                    </div>
+                                )}
+
+                                {/* Main Preview */}
+                                <AnimatePresence mode="wait">
+                                    {result ? (
                                         <motion.div
-                                            key="error"
-                                            initial={{ opacity: 0, scale: 0.9 }}
-                                            animate={{ opacity: 1, scale: 1 }}
-                                            className="flex flex-col items-center gap-4 text-red-500 px-10 text-center"
+                                            key="result-player"
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, scale: 0.95 }}
+                                            className="bg-white p-4 rounded-3xl border border-slate-100 shadow-2xl"
                                         >
-                                            <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center">
-                                                <AlertCircle size={32} />
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-lg mb-1">Упс! Ошибка</p>
-                                                <p className="font-medium text-sm text-slate-500 max-w-xs mx-auto">{error}</p>
-                                            </div>
-                                            <button
-                                                onClick={handleGenerate}
-                                                className="px-6 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all"
-                                            >
-                                                Попробовать еще раз
-                                            </button>
-                                        </motion.div>
-                                    ) : result ? (
-                                        <motion.div
-                                            key="result"
-                                            initial={{ scale: 1.05, opacity: 0 }}
-                                            animate={{ scale: 1, opacity: 1 }}
-                                            className="w-full h-full p-4"
-                                        >
-                                            {result.type === 'video' ? (
-                                                <div className="relative w-full h-full rounded-2xl overflow-hidden bg-black shadow-2xl group/player">
+                                            <div className="relative aspect-video rounded-2xl overflow-hidden bg-black shadow-inner group">
+                                                {result.type === 'video' ? (
                                                     <video
+                                                        key={result.url}
                                                         src={result.url}
                                                         controls
                                                         autoPlay
-                                                        loop
                                                         className="w-full h-full object-contain"
                                                     />
-                                                    <div className="absolute top-4 left-4 bg-black/30 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black text-white uppercase tracking-widest border border-white/10 opacity-0 group-hover/player:opacity-100 transition-all">
-                                                        Veo 3.1 • 1080p
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="relative w-full h-full rounded-2xl overflow-hidden bg-white shadow-2xl">
-                                                    <img
-                                                        src={result.url}
-                                                        alt="Result"
-                                                        className="w-full h-full object-contain"
-                                                    />
-                                                    <button className="absolute bottom-4 right-4 bg-white/80 backdrop-blur-md p-3 rounded-2xl text-slate-800 shadow-xl opacity-0 group-hover/preview:opacity-100 transition-all hover:scale-110 active:scale-95">
-                                                        <Maximize2 size={20} />
-                                                    </button>
-                                                </div>
-                                            )}
+                                                ) : (
+                                                    <img src={result.url} alt="Preview" className="w-full h-full object-contain" />
+                                                )}
+                                                <button
+                                                    onClick={() => window.open(result.url, '_blank')}
+                                                    className="absolute top-4 right-4 bg-black/50 hover:bg-black text-white p-2 rounded-xl backdrop-blur-md transition-all scale-0 group-hover:scale-100"
+                                                >
+                                                    <Maximize2 size={16} />
+                                                </button>
+                                            </div>
+                                            <div className="mt-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                                <p className="text-xs font-bold text-slate-400 mb-2 uppercase flex items-center gap-2">
+                                                    <Wand2 size={12} /> Запрос
+                                                </p>
+                                                <p className="text-sm font-medium text-slate-700 italic">"{result.prompt}"</p>
+                                            </div>
                                         </motion.div>
-                                    ) : (
+                                    ) : tasks.length === 0 && (
                                         <motion.div
-                                            key="empty"
+                                            key="empty-state"
                                             initial={{ opacity: 0 }}
                                             animate={{ opacity: 1 }}
-                                            className="flex flex-col items-center text-center px-10"
+                                            className="h-full flex flex-col items-center justify-center p-10 text-center"
                                         >
-                                            <div className="w-24 h-24 rounded-[2rem] bg-white shadow-2xl flex items-center justify-center text-slate-100 mb-8 border border-slate-50">
-                                                {activeTab === 'video' ? <Video size={48} /> : <ImageIcon size={48} />}
+                                            <div className="w-20 h-20 rounded-3xl bg-white shadow-xl flex items-center justify-center text-slate-200 mb-6 border border-slate-50">
+                                                <Video size={32} />
                                             </div>
-                                            <h3 className="text-2xl font-black text-slate-800 mb-3 tracking-tight" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                                                {activeTab === 'video' ? 'Оживите воображение' : 'Создайте нечто вечное'}
-                                            </h3>
-                                            <p className="text-slate-400 font-bold max-w-sm leading-relaxed">
-                                                {activeTab === 'video'
-                                                    ? 'Опишите ваше видео. Veo 3.1 создаст кинематографичный ролик с качеством 1080p, русской озвучкой и чистым звуком.'
-                                                    : 'Генерируйте профессиональные изображения за считанные секунды с помощью моделей нового поколения.'}
-                                            </p>
+                                            <h3 className="text-xl font-black text-slate-800 mb-2">Начните создание</h3>
+                                            <p className="text-slate-400 text-sm font-medium">Ваши генерации появятся здесь. Можно запускать до 6 штук одновременно и переключаться между ними.</p>
                                         </motion.div>
                                     )}
                                 </AnimatePresence>

@@ -4,7 +4,7 @@ import { MessageSquare, Video, Image as ImageIcon, Mic, Music, PenTool, LogOut, 
 import { useUser } from '../../context/UserContext';
 import { authService } from '../../services/api';
 import TopUpModal from '../TopUpModal';
-import logo from '../../assets/logo.png';
+import logo from '../../assets/logo.jpg';
 
 const Header = () => {
     const navigate = useNavigate();
@@ -37,7 +37,7 @@ const Header = () => {
                         <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center overflow-hidden border border-slate-100 group-hover:shadow-md transition-all">
                             <img src={logo} alt="Logo" className="w-full h-full object-contain p-1" />
                         </div>
-                        <span className="font-black text-lg tracking-tight text-slate-900 font-outfit">AI Asol</span>
+                        <span className="font-black text-lg tracking-tight text-slate-900 font-outfit">AI Asol Studio</span>
                     </div>
 
                     <nav className="hidden md:flex items-center gap-1">

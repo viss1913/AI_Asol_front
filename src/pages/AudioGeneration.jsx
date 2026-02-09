@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MessageSquare, AudioWaveform, Wand2, Play, Download, Loader2, Plus, Trash2, Volume2, Sparkles, ChevronRight, AlertCircle, Clock, Info, X } from 'lucide-react';
-import { audioService, historyService } from '../services/api';
+import { audioService, historyService, configService } from '../services/api';
 import { useUser } from '../context/UserContext';
 import Button from '../components/common/Button';
 
@@ -29,9 +29,30 @@ const AudioGeneration = () => {
     const [sfxPrompt, setSfxPrompt] = useState('');
     const [sfxOptions, setSfxOptions] = useState({ duration_seconds: 3.5, prompt_influence: 0.3 });
 
+    const [prices, setPrices] = useState({ tts: 6, dialogue: 12, sfx: 0.5 });
+
     useEffect(() => {
         fetchVoices();
+        fetchPrices();
     }, []);
+
+    const fetchPrices = async () => {
+        try {
+            const [ttsData, dialogueData, sfxData] = await Promise.all([
+                configService.calculateCost('elevenlabs/text-to-speech-turbo-2-5', { prompt: 'a'.repeat(1000) }),
+                configService.calculateCost('elevenlabs/text-to-dialogue-v3', { options: { dialogue: [{ text: 'a'.repeat(1000) }] } }),
+                configService.calculateCost('elevenlabs/sound-effect-v2', { options: { duration_seconds: 1 } })
+            ]);
+            setPrices({
+                tts: ttsData.cost || 6,
+                dialogue: dialogueData.cost || 12,
+                sfx: sfxData.cost || 0.5
+            });
+        } catch (error) {
+            console.error("Failed to fetch audio prices:", error);
+            // Already initialized with defaults in useState
+        }
+    };
 
     const [errorMsg, setErrorMsg] = useState('');
 
@@ -72,6 +93,9 @@ const AudioGeneration = () => {
 
     const handleGenerate = async () => {
         setIsGenerating(true);
+        const tempId = 'temp-' + Date.now();
+        const placeholderPrompt = activeTab === 'tts' ? ttsPrompt : (activeTab === 'sfx' ? sfxPrompt : 'Диалог персонажей');
+
         try {
             let requestData = {};
             if (activeTab === 'tts') {
@@ -99,50 +123,63 @@ const AudioGeneration = () => {
                 };
             }
 
+            // Put a placeholder in history immediately
+            const processingItem = {
+                id: tempId,
+                prompt: placeholderPrompt,
+                status: 'processing',
+                timestamp: Date.now(),
+                model: requestData.model
+            };
+            setHistory(prev => [processingItem, ...prev]);
+
             const response = await audioService.generateAudio(requestData);
 
             if (response.id) {
-                pollStatus(response.id);
+                pollStatus(response.id, tempId);
             } else if (response.url) {
                 const newItem = {
                     ...response,
                     output_url: response.url,
-                    id: Date.now()
+                    id: response.id || Date.now(),
+                    status: 'success'
                 };
-                setHistory(prev => [newItem, ...prev]);
+                setHistory(prev => prev.map(item => item.id === tempId ? newItem : item));
             }
 
             if (response.newBalance !== undefined) {
                 updateBalance(response.newBalance);
             }
         } catch (err) {
+            setHistory(prev => prev.filter(item => item.id !== tempId));
             alert(err.response?.data?.error || "Ошибка при генерации аудио");
         } finally {
             setIsGenerating(false);
         }
     };
 
-    const pollStatus = async (taskId) => {
+    const pollStatus = async (taskId, tempId) => {
         const check = async () => {
             try {
                 const statusData = await historyService.getTaskStatus(taskId);
 
                 if (statusData.status === 'success') {
-                    // Ensure output_url exists (backend might use 'url' or 'fileUrl')
                     const finalItem = {
                         ...statusData,
                         id: taskId,
-                        output_url: statusData.url
+                        output_url: statusData.url,
+                        status: 'success'
                     };
-                    setHistory(prev => [finalItem, ...prev]);
+                    setHistory(prev => prev.map(item => (item.id === tempId || item.id === taskId) ? finalItem : item));
                     return true;
                 } else if (statusData.status === 'failed' || statusData.status === 'error') {
+                    setHistory(prev => prev.filter(item => item.id !== tempId && item.id !== taskId));
                     alert("Генерация не удалась: " + (statusData.error || "Ошибка на стороне сервера"));
                     return true;
                 }
                 return false;
             } catch (err) {
-                return false; // Continue polling on transient errors
+                return false;
             }
         };
 
@@ -150,6 +187,24 @@ const AudioGeneration = () => {
             const finished = await check();
             if (finished) clearInterval(interval);
         }, 3000);
+    };
+
+    const handleDownload = async (url, filename) => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename || `ai-asol-audio-${Date.now()}.mp3`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (err) {
+            console.error("Download failed:", err);
+            window.open(url, '_blank');
+        }
     };
 
     const addDialogueBlock = () => {
@@ -299,7 +354,7 @@ const AudioGeneration = () => {
                                     <div className="pt-2">
                                         <div className="flex items-center gap-2 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 mb-6">
                                             <Info size={16} className="text-indigo-600" />
-                                            <p className="text-xs font-bold text-indigo-600/80 uppercase tracking-wider">Цена: 6 руб / 1000 символов</p>
+                                            <p className="text-xs font-bold text-indigo-600/80 uppercase tracking-wider">Цена: {prices.tts} руб / 1000 символов</p>
                                         </div>
                                         <Button
                                             onClick={handleGenerate}
@@ -371,7 +426,7 @@ const AudioGeneration = () => {
                                     <div className="pt-2">
                                         <div className="flex items-center gap-2 p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 mb-6">
                                             <Info size={16} className="text-emerald-600" />
-                                            <p className="text-xs font-bold text-emerald-600/80 uppercase tracking-wider">Цена: 12 руб / 1000 символов</p>
+                                            <p className="text-xs font-bold text-emerald-600/80 uppercase tracking-wider">Цена: {prices.dialogue} руб / 1000 символов</p>
                                         </div>
                                         <Button
                                             onClick={handleGenerate}
@@ -433,7 +488,7 @@ const AudioGeneration = () => {
                                     <div className="pt-2">
                                         <div className="flex items-center gap-2 p-4 bg-amber-50/50 rounded-2xl border border-amber-100 mb-6">
                                             <Info size={16} className="text-amber-600" />
-                                            <p className="text-xs font-bold text-amber-600/80 uppercase tracking-wider">Цена: 0.50 руб / 1 сек</p>
+                                            <p className="text-xs font-bold text-amber-600/80 uppercase tracking-wider">Цена: {prices.sfx.toFixed(2)} руб / 1 сек</p>
                                         </div>
                                         <Button
                                             onClick={handleGenerate}
@@ -475,32 +530,36 @@ const AudioGeneration = () => {
                                         key={item.id}
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
-                                        className="p-5 rounded-3xl border border-slate-50 bg-slate-50/50 hover:bg-white hover:shadow-xl hover:shadow-indigo-500/5 transition-all group"
+                                        className={`p-5 rounded-3xl border transition-all group ${item.status === 'processing'
+                                            ? 'bg-indigo-50/30 border-indigo-100 animate-pulse'
+                                            : 'border-slate-50 bg-slate-50/50 hover:bg-white hover:shadow-xl hover:shadow-indigo-500/5'
+                                            }`}
                                     >
                                         <div className="flex items-center gap-4 mb-4">
-                                            <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-indigo-500 shadow-sm">
-                                                <Volume2 size={18} />
+                                            <div className={`w-10 h-10 rounded-xl bg-white border flex items-center justify-center shadow-sm ${item.status === 'processing' ? 'border-indigo-200 text-indigo-400' : 'border-slate-100 text-indigo-500'
+                                                }`}>
+                                                {item.status === 'processing' ? <Loader2 size={18} className="animate-spin" /> : <Volume2 size={18} />}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-xs font-black text-slate-900 truncate uppercase tracking-tighter">
-                                                    {item.prompt || (item.model?.includes('dialogue') ? 'Диалог персонажей' : 'TTS Генерация')}
+                                                    {item.status === 'processing' ? 'Генерируем аудио...' : (item.prompt || (item.model?.includes('dialogue') ? 'Диалог персонажей' : 'TTS Генерация'))}
                                                 </p>
-                                                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{new Date().toLocaleTimeString()}</span>
+                                                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                                                    {item.status === 'processing' ? 'В процессе...' : new Date(item.timestamp || Date.now()).toLocaleTimeString()}
+                                                </span>
                                             </div>
                                         </div>
 
-                                        {item.output_url && (
+                                        {item.status !== 'processing' && item.output_url && (
                                             <div className="space-y-4">
                                                 <audio src={item.output_url} controls className="w-full h-8" />
                                                 <div className="flex gap-2">
-                                                    <a
-                                                        href={item.output_url}
-                                                        download
-                                                        target="_blank"
-                                                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+                                                    <button
+                                                        onClick={() => handleDownload(item.output_url, `ai-asol-${item.id}.mp3`)}
+                                                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all shadow-sm active:scale-95 cursor-pointer"
                                                     >
                                                         <Download size={14} /> Скачать
-                                                    </a>
+                                                    </button>
                                                 </div>
                                             </div>
                                         )}

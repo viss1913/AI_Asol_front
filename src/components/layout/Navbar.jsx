@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { authService } from '../../services/api';
 import { useUser } from '../../context/UserContext';
-import logo from '../../assets/logo.png';
+import logo from '../../assets/logo.jpg';
 
 const Navbar = () => {
   const { balance } = useUser();
@@ -34,10 +34,10 @@ const Navbar = () => {
         <div className="flex items-center gap-10">
           <Link to="/" className="flex items-center gap-3 group">
             <div className={`overflow-hidden rounded-xl bg-white flex items-center justify-center p-1 shadow-sm group-hover:scale-105 transition-transform duration-300 ${isChatPage ? 'w-8 h-8' : 'w-10 h-10'}`}>
-              <img src={logo} alt="AI Asol Logo" className="w-full h-full object-contain" />
+              <img src={logo} alt="AI Asol Studio Logo" className="w-full h-full object-contain" />
             </div>
             <span className={`${isChatPage ? 'text-lg' : 'text-xl'} font-bold tracking-tight family-outfit text-slate-900 group-hover:text-indigo-600 transition-colors`}>
-              AI Asol
+              AI Asol Studio
             </span>
           </Link>
 

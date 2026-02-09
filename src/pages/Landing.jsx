@@ -1,12 +1,41 @@
+import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight, Video, MessageSquare, Sparkles, Zap, Globe, Music, Image as ImageIcon, Wand2, Mic } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../components/common/Button';
 import videoShowcase from '../assets/veo-showcase.mp4';
 import landing from '../assets/landing.jpg';
+import demoSound from '../assets/sound.mp3';
+import demoDialog from '../assets/dialog.mp3';
+import demoSfx from '../assets/sound_effect.mp3';
+import { Play as PlayIcon, Pause } from 'lucide-react';
 
 const Landing = () => {
     const navigate = useNavigate();
+    const [playingId, setPlayingId] = React.useState(null);
+    const audioRef = React.useRef(null);
+
+    const togglePlay = (id, src) => {
+        if (playingId === id) {
+            audioRef.current.pause();
+            setPlayingId(null);
+        } else {
+            if (audioRef.current) {
+                audioRef.current.src = src;
+                audioRef.current.play();
+                setPlayingId(id);
+            }
+        }
+    };
+
+    React.useEffect(() => {
+        const handleEnded = () => setPlayingId(null);
+        const currentAudio = audioRef.current;
+        if (currentAudio) {
+            currentAudio.addEventListener('ended', handleEnded);
+            return () => currentAudio.removeEventListener('ended', handleEnded);
+        }
+    }, []);
 
     const services = [
         {
@@ -48,7 +77,7 @@ const Landing = () => {
     ];
 
     return (
-        <div className="min-h-screen relative overflow-hidden">
+        <main className="min-h-screen relative overflow-hidden">
             {/* Hero Section */}
             <section className="relative pt-32 pb-24">
                 <div className="max-w-7xl mx-auto px-6 text-center relative z-10">
@@ -67,39 +96,39 @@ const Landing = () => {
                         </p>
 
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-20">
-                            <Button size="lg" onClick={() => navigate('/studio')} className="px-12 h-16 text-lg rounded-2xl bg-slate-900 text-white shadow-xl hover:bg-slate-800">
+                            <Button size="lg" onClick={() => navigate('/studio')} className="px-12 h-16 text-lg rounded-2xl bg-slate-900 text-white shadow-xl hover:bg-slate-800" aria-label="Открыть видеостудию">
                                 Открыть Студию
                             </Button>
-                            <Button variant="outline" size="lg" onClick={() => navigate('/chat')} className="px-12 h-16 text-lg rounded-2xl border-slate-200 bg-white/50 backdrop-blur-sm">
+                            <Button variant="outline" size="lg" onClick={() => navigate('/chat')} className="px-12 h-16 text-lg rounded-2xl border-slate-200 bg-white/50 backdrop-blur-sm" aria-label="Открыть умный чат">
                                 Умный Чат <ArrowRight size={20} className="ml-2" />
                             </Button>
                         </div>
 
                         {/* Stats */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
-                            <div>
+                            <article>
                                 <div className="text-4xl font-black text-slate-900 mb-2">99.9%</div>
-                                <div className="text-sm text-slate-500 font-medium">Uptime</div>
-                            </div>
-                            <div>
+                                <div className="text-sm text-slate-500 font-medium uppercase tracking-wider">Uptime</div>
+                            </article>
+                            <article>
                                 <div className="text-4xl font-black text-slate-900 mb-2">&lt; 25s</div>
-                                <div className="text-sm text-slate-500 font-medium">Генерация</div>
-                            </div>
-                            <div>
+                                <div className="text-sm text-slate-500 font-medium uppercase tracking-wider">Генерация</div>
+                            </article>
+                            <article>
                                 <div className="text-4xl font-black text-slate-900 mb-2">24/7</div>
-                                <div className="text-sm text-slate-500 font-medium">Поддержка</div>
-                            </div>
-                            <div>
+                                <div className="text-sm text-slate-500 font-medium uppercase tracking-wider">Поддержка</div>
+                            </article>
+                            <article>
                                 <div className="text-4xl font-black text-slate-900 mb-2">SSL</div>
-                                <div className="text-sm text-slate-500 font-medium">Безопасность</div>
-                            </div>
+                                <div className="text-sm text-slate-500 font-medium uppercase tracking-wider">Безопасность</div>
+                            </article>
                         </div>
                     </motion.div>
                 </div>
             </section>
 
             {/* Video Showcase Section */}
-            <section className="py-12 bg-gradient-to-b from-white to-slate-50">
+            <section className="py-12 bg-gradient-to-b from-white to-slate-50" aria-label="Демонстрация видео">
                 <div className="max-w-7xl mx-auto px-6">
                     <motion.div
                         initial={{ opacity: 0, y: 30 }}
@@ -115,6 +144,7 @@ const Landing = () => {
                                 loop
                                 muted
                                 playsInline
+                                title="Демонстрация генерации видео Veo 3.1"
                                 className="w-full h-auto"
                             />
                         </div>
@@ -153,7 +183,7 @@ const Landing = () => {
             </section>
 
             {/* Image Showcase Section */}
-            <section className="py-12 bg-slate-50">
+            <section className="py-12 bg-slate-50" aria-label="Демонстрация изображений">
                 <div className="max-w-7xl mx-auto px-6">
                     <motion.div
                         initial={{ opacity: 0, y: 30 }}
@@ -183,7 +213,7 @@ const Landing = () => {
                                     <span className="text-slate-600 font-medium text-lg">Upscale и безупречная детализация</span>
                                 </li>
                             </ul>
-                            <Button size="lg" onClick={() => navigate('/image')} className="px-10 h-14 rounded-2xl">
+                            <Button size="lg" onClick={() => navigate('/image')} className="px-10 h-14 rounded-2xl hover:bg-pink-600">
                                 Создать Арт <ArrowRight size={20} className="ml-2" />
                             </Button>
                         </div>
@@ -191,8 +221,9 @@ const Landing = () => {
                         <div className="relative rounded-3xl overflow-hidden shadow-2xl order-1 lg:order-2">
                             <img
                                 src={landing}
-                                alt="AI Generated Art"
+                                alt="Пример генерации ИИ: фотореалистичное изображение"
                                 className="w-full h-auto"
+                                loading="lazy"
                             />
                         </div>
                     </motion.div>
@@ -200,7 +231,7 @@ const Landing = () => {
             </section>
 
             {/* Audio Showcase Section */}
-            <section className="py-12 bg-white">
+            <section className="py-12 bg-white" aria-label="Демонстрация аудио">
                 <div className="max-w-7xl mx-auto px-6">
                     <motion.div
                         initial={{ opacity: 0, y: 30 }}
@@ -212,9 +243,9 @@ const Landing = () => {
                         <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-amber-50 to-orange-100 p-8 flex items-center justify-center min-h-[400px]">
                             <div className="flex flex-col items-center gap-6">
                                 <div className="w-32 h-32 rounded-full bg-white shadow-xl flex items-center justify-center animate-pulse">
-                                    <Music size={64} className="text-amber-500" />
+                                    <Music size={64} className="text-amber-500" aria-hidden="true" />
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex gap-2" aria-hidden="true">
                                     {[1, 2, 3, 4, 5].map(i => (
                                         <div key={i} className="w-1.5 h-12 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.1}s` }} />
                                     ))}
@@ -229,20 +260,54 @@ const Landing = () => {
                             <p className="text-xl text-slate-600 mb-4 font-medium leading-relaxed">
                                 Голос вашего бренда от ElevenLabs
                             </p>
-                            <ul className="space-y-4 mb-8">
-                                <li className="flex items-start gap-3">
-                                    <Sparkles className="text-amber-600 mt-1 flex-shrink-0" size={20} />
-                                    <span className="text-slate-600 font-medium text-lg">Реалистичная озвучка на русском языке с эмоциями</span>
+                            <ul className="space-y-6 mb-8">
+                                <li className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-amber-200 transition-all">
+                                    <div className="flex items-start gap-4">
+                                        <div className="p-2 bg-white rounded-xl shadow-sm">
+                                            <Sparkles className="text-amber-600" size={20} />
+                                        </div>
+                                        <span className="text-slate-600 font-bold text-lg">Реалистичная озвучка на русском</span>
+                                    </div>
+                                    <button
+                                        onClick={() => togglePlay('tts', demoSound)}
+                                        className="p-3 bg-white border border-slate-100 rounded-xl text-amber-500 hover:bg-amber-50 transition-all shadow-sm active:scale-95"
+                                        aria-label={playingId === 'tts' ? "Остановить демо" : "Прослушать демо озвучки"}
+                                    >
+                                        {playingId === 'tts' ? <Pause size={20} /> : <PlayIcon size={20} />}
+                                    </button>
                                 </li>
-                                <li className="flex items-start gap-3">
-                                    <Sparkles className="text-amber-600 mt-1 flex-shrink-0" size={20} />
-                                    <span className="text-slate-600 font-medium text-lg">Генерация живых диалогов для ваших проектов</span>
+                                <li className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-amber-200 transition-all">
+                                    <div className="flex items-start gap-4">
+                                        <div className="p-2 bg-white rounded-xl shadow-sm">
+                                            <Sparkles className="text-amber-600" size={20} />
+                                        </div>
+                                        <span className="text-slate-600 font-bold text-lg">Генерация живых диалогов</span>
+                                    </div>
+                                    <button
+                                        onClick={() => togglePlay('dialog', demoDialog)}
+                                        className="p-3 bg-white border border-slate-100 rounded-xl text-amber-500 hover:bg-amber-50 transition-all shadow-sm active:scale-95"
+                                        aria-label={playingId === 'dialog' ? "Остановить демо" : "Прослушать демо диалога"}
+                                    >
+                                        {playingId === 'dialog' ? <Pause size={20} /> : <PlayIcon size={20} />}
+                                    </button>
                                 </li>
-                                <li className="flex items-start gap-3">
-                                    <Sparkles className="text-amber-600 mt-1 flex-shrink-0" size={20} />
-                                    <span className="text-slate-600 font-medium text-lg">Создание уникальных звуковых эффектов (SFX) по описанию</span>
+                                <li className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-amber-200 transition-all">
+                                    <div className="flex items-start gap-4">
+                                        <div className="p-2 bg-white rounded-xl shadow-sm">
+                                            <Sparkles className="text-amber-600" size={20} />
+                                        </div>
+                                        <span className="text-slate-600 font-bold text-lg">Звуковые эффекты (SFX)</span>
+                                    </div>
+                                    <button
+                                        onClick={() => togglePlay('sfx', demoSfx)}
+                                        className="p-3 bg-white border border-slate-100 rounded-xl text-amber-500 hover:bg-amber-50 transition-all shadow-sm active:scale-95"
+                                        aria-label={playingId === 'sfx' ? "Остановить демо" : "Прослушать демо эффектов"}
+                                    >
+                                        {playingId === 'sfx' ? <Pause size={20} /> : <PlayIcon size={20} />}
+                                    </button>
                                 </li>
                             </ul>
+                            <audio ref={audioRef} className="hidden" />
                             <Button size="lg" onClick={() => navigate('/audio')} className="px-10 h-14 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white border-none shadow-amber-200">
                                 Создать Звук <ArrowRight size={20} className="ml-2" />
                             </Button>
@@ -252,7 +317,7 @@ const Landing = () => {
             </section>
 
             {/* Services Grid */}
-            <section className="py-12 bg-white">
+            <section className="py-12 bg-white" aria-label="Все доступные сервисы">
                 <div className="max-w-7xl mx-auto px-6">
                     <div className="text-center mb-16">
                         <h2 className="text-5xl font-black text-slate-900 mb-6 family-outfit">Все сервисы в одном месте</h2>
@@ -261,7 +326,7 @@ const Landing = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {services.map((service, index) => (
-                            <motion.div
+                            <motion.article
                                 key={index}
                                 initial={{ opacity: 0, y: 20 }}
                                 whileInView={{ opacity: 1, y: 0 }}
@@ -270,12 +335,12 @@ const Landing = () => {
                                 onClick={() => service.link !== '#' && navigate(service.link)}
                                 className="group cursor-pointer bg-white border-2 border-slate-100 rounded-3xl p-8 hover:border-slate-300 hover:shadow-xl transition-all duration-300"
                             >
-                                <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform" aria-hidden="true">
                                     {service.icon}
                                 </div>
                                 <h3 className="text-2xl font-bold text-slate-900 mb-2 family-outfit">{service.title}</h3>
                                 <p className="text-slate-500 font-medium">{service.description}</p>
-                            </motion.div>
+                            </motion.article>
                         ))}
                     </div>
                 </div>
@@ -283,7 +348,7 @@ const Landing = () => {
 
             {/* CTA Section */}
             <section className="py-24 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 relative overflow-hidden">
-                <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48cGF0aCBkPSJNMzYgMzRjMC0yLjIxLTEuNzktNC00LTRzLTQgMS43OS00IDQgMS43OSA0IDQgNCA0LTEuNzkgNC00em0wLTEwYzAtMi4yMS0xLjc5LTQtNC00cy00IDEuNzktNCA0IDEuNzkgNCA0IDQgNC0xLjc5IDQtNHptMC0xMGMwLTIuMjEtMS43OS00LTQtNHMtNCAxLjc5LTQgNCAxLjc5IDQgNCA0IDQtMS43OSA0LTR6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-20"></div>
+                <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48cGF0aCBkPSJNMzYgMzRjMC0yLjIxLTEuNzktNC00LTRzLTQgMS43OS00IDQgMS43OSA0IDQgNCA0LTEuNzkgNC00em0wLTEwYzAtMi4yMS0xLjc5LTQtNC00cy00IDEuNzktNCA0IDEuNzkgNCA0IDQgNC0xLjc5IDQtNHptMC0xMGMwLTIuMjEtMS43OS00LTQtNHMtNCAxLjc5LTQgNCAxLjc5IDQgNCA0IDQtMS43OSA0LTR6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-20" aria-hidden="true"></div>
                 <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
                     <motion.div
                         initial={{ opacity: 0, y: 30 }}
@@ -295,7 +360,7 @@ const Landing = () => {
                             Готовы начать творить?
                         </h2>
                         <p className="text-xl text-white/90 mb-12 font-medium">
-                            Присоединяйтесь к тысячам создателей, которые уже используют AI Asol для воплощения своих идей
+                            Присоединяйтесь к тысячам создателей, которые уже используют AI Asol Studio для воплощения своих идей
                         </p>
                         <Button
                             size="lg"
@@ -307,7 +372,7 @@ const Landing = () => {
                     </motion.div>
                 </div>
             </section>
-        </div>
+        </main>
     );
 };
 
