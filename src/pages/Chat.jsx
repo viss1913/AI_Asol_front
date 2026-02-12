@@ -46,6 +46,7 @@ const Chat = () => {
     };
 
     const loadHistory = async (chatId) => {
+        if (window.innerWidth < 1024) setIsSidebarOpen(false); // Auto-close on mobile
         setLoadingHistory(true);
         setCurrentChatId(chatId);
         try {
@@ -79,6 +80,7 @@ const Chat = () => {
     };
 
     const handleNewChat = () => {
+        if (window.innerWidth < 1024) setIsSidebarOpen(false); // Auto-close on mobile
         setCurrentChatId(null);
         setMessages([]); // Clear to show the pretty empty state
     };

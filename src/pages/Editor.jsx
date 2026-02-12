@@ -7,6 +7,7 @@ import { contentService, projectService, historyService, configService } from '.
 import { useUser } from '../context/UserContext';
 import { useTasks } from '../context/TaskContext';
 import { Folder, Plus, CreditCard, X } from 'lucide-react';
+import MediaGalleryModal from '../components/editor/MediaGalleryModal';
 
 const Editor = ({ defaultTab }) => {
     const { updateBalance } = useUser();
@@ -33,7 +34,7 @@ const Editor = ({ defaultTab }) => {
     const endFileInputRef = useRef(null);
 
     // Video model selection
-    const [videoModel, setVideoModel] = useState('veo3'); // 'veo3', 'veo3_fast', 'sora-2-pro'
+    const [videoModel, setVideoModel] = useState('veo3_fast'); // 'veo3', 'veo3_fast', 'sora-2-pro'
     const [soraDuration, setSoraDuration] = useState(10); // 10 or 15
     const [soraQuality, setSoraQuality] = useState('standard'); // 'standard' or 'high'
     const [imageUrl, setImageUrl] = useState('');
@@ -42,6 +43,8 @@ const Editor = ({ defaultTab }) => {
     const [imageCost, setImageCost] = useState(50); // Default image cost
     const [uploading, setUploading] = useState(false);
     const [uploadingEnd, setUploadingEnd] = useState(false);
+    const [showGalleryModal, setShowGalleryModal] = useState(false);
+    const [activeGallerySlot, setActiveGallerySlot] = useState('main'); // 'main' or 'end'
 
     // Calculate video cost when model or options change
     useEffect(() => {
@@ -120,7 +123,7 @@ const Editor = ({ defaultTab }) => {
     };
 
     const handleFileUpload = async (e, type = 'main') => {
-        const file = e.target.files[0];
+        const file = e.target ? e.target.files[0] : e; // Handle both event and raw file
         if (!file) return;
 
         if (type === 'end') setUploadingEnd(true);
@@ -137,7 +140,19 @@ const Editor = ({ defaultTab }) => {
         } finally {
             if (type === 'end') setUploadingEnd(false);
             else setUploading(false);
+            setShowGalleryModal(false); // Close modal after upload
         }
+    };
+
+    const openGallery = (slot) => {
+        setActiveGallerySlot(slot);
+        setShowGalleryModal(true);
+    };
+
+    const handleGallerySelect = (url) => {
+        if (activeGallerySlot === 'end') setImageEndUrl(url);
+        else setImageUrl(url);
+        setShowGalleryModal(false);
     };
 
     const handleGenerate = async () => {
@@ -228,8 +243,8 @@ const Editor = ({ defaultTab }) => {
                                 <div className="space-y-3 mb-6">
                                     <div className="grid grid-cols-3 gap-1.5">
                                         {[
-                                            { id: 'veo3', name: 'Veo 3 Quality', color: 'bg-indigo-600' },
                                             { id: 'veo3_fast', name: 'Veo 3 Fast', color: 'bg-amber-600' },
+                                            { id: 'veo3', name: 'Veo 3 Quality', color: 'bg-indigo-600' },
                                             { id: 'sora-2-pro', name: 'Sora 2 Pro', color: 'bg-purple-600' }
                                         ].map(m => (
                                             <button
@@ -444,7 +459,7 @@ const Editor = ({ defaultTab }) => {
                             <div className={`grid gap-4 ${videoModel.startsWith('veo') && activeTab === 'video' ? 'grid-cols-2' : 'grid-cols-1'}`}>
                                 {/* Slot 1: Start Frame / Reference */}
                                 <section
-                                    onClick={() => fileInputRef.current?.click()}
+                                    onClick={() => openGallery('main')}
                                     className="bg-slate-50 border-2 border-dashed border-slate-200 p-4 rounded-3xl group hover:border-[#6366f1] transition-all cursor-pointer overflow-hidden relative"
                                 >
                                     <input
@@ -491,7 +506,7 @@ const Editor = ({ defaultTab }) => {
                                 {/* Slot 2: End Frame (Only for Veo) */}
                                 {activeTab === 'video' && videoModel.startsWith('veo') && (
                                     <section
-                                        onClick={() => endFileInputRef.current?.click()}
+                                        onClick={() => openGallery('end')}
                                         className="bg-slate-50 border-2 border-dashed border-slate-200 p-4 rounded-3xl group hover:border-[#6366f1] transition-all cursor-pointer overflow-hidden relative"
                                     >
                                         <input
@@ -771,6 +786,17 @@ const Editor = ({ defaultTab }) => {
                     </div>
                 )}
             </AnimatePresence>
+
+            <MediaGalleryModal
+                isOpen={showGalleryModal}
+                onClose={() => setShowGalleryModal(false)}
+                onSelect={handleGallerySelect}
+                onUploadClick={() => {
+                    if (activeGallerySlot === 'end') endFileInputRef.current?.click();
+                    else fileInputRef.current?.click();
+                }}
+                title={activeGallerySlot === 'end' ? "Выберите конечный кадр" : (activeTab === 'image' ? "Выберите референс" : "Выберите начальный кадр")}
+            />
         </>
     );
 };

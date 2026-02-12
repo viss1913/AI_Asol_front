@@ -16,6 +16,11 @@ api.interceptors.request.use((config) => {
 export const authService = {
     register: async (userData) => {
         const response = await api.post('/auth/register', userData);
+        // if (response.data.token) localStorage.setItem('token', response.data.token);
+        return response.data;
+    },
+    verifyEmail: async (email, code) => {
+        const response = await api.post('/auth/verify-email', { email, code });
         if (response.data.token) localStorage.setItem('token', response.data.token);
         return response.data;
     },
@@ -85,6 +90,11 @@ export const contentService = {
                 'Content-Type': 'multipart/form-data',
             },
         });
+        return response.data;
+    },
+    fetchAssets: async (type = null) => {
+        const params = type ? { type } : {};
+        const response = await api.get('/assets', { params });
         return response.data;
     },
 };

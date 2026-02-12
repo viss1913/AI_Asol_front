@@ -5,13 +5,14 @@ import Landing from './pages/Landing';
 import Home from './pages/Home';
 import Editor from './pages/Editor';
 import Auth from './pages/Auth';
+
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Chat from './pages/Chat';
 import VideoGeneration from './pages/VideoGeneration';
 import ImageGeneration from './pages/ImageGeneration';
 import AudioGeneration from './pages/AudioGeneration';
-import Footer from './components/layout/Footer';
+import VideoEditor from './pages/VideoEditor';
 import CookieConsent from './components/common/CookieConsent';
 import Dashboard from './pages/Dashboard';
 
@@ -63,6 +64,8 @@ function App() {
             user ? <Navigate to="/dashboard" replace /> : <Auth />
           } />
 
+
+
           <Route path="/forgot-password" element={
             user ? <Navigate to="/dashboard" replace /> : <ForgotPassword />
           } />
@@ -96,6 +99,12 @@ function App() {
             </ProtectedRoute>
           } />
 
+          <Route path="/video-editor" element={
+            <ProtectedRoute>
+              <VideoEditor />
+            </ProtectedRoute>
+          } />
+
           <Route path="/editor" element={
             <ProtectedRoute>
               <Editor />
@@ -115,7 +124,6 @@ function App() {
         </Routes>
       </main>
 
-      {!isChat && <Footer />}
       <CookieConsent />
     </div>
   );

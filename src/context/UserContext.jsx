@@ -35,10 +35,26 @@ export const UserProvider = ({ children }) => {
 
     useEffect(() => {
         refreshProfile();
+
+        const handleStorageChange = (e) => {
+            if (e.key === 'token') {
+                refreshProfile();
+            }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+        return () => window.removeEventListener('storage', handleStorageChange);
     }, []);
 
     const updateBalance = (newBalance) => {
         setBalance(newBalance);
+    };
+
+    const updateUser = (userData) => {
+        setUser(userData);
+        if (userData?.balance !== undefined) {
+            setBalance(userData.balance);
+        }
     };
 
     const login = async (credentials) => {
@@ -52,10 +68,11 @@ export const UserProvider = ({ children }) => {
 
     const register = async (userData) => {
         const data = await authService.register(userData);
-        if (data.token) {
-            localStorage.setItem('token', data.token);
-            await refreshProfile();
-        }
+        // Do not auto-login after register anymore
+        // if (data.token) {
+        //     localStorage.setItem('token', data.token);
+        //     await refreshProfile();
+        // }
         return data;
     };
 
@@ -66,7 +83,7 @@ export const UserProvider = ({ children }) => {
     };
 
     return (
-        <UserContext.Provider value={{ user, balance, loading, refreshProfile, updateBalance, logout, login, register }}>
+        <UserContext.Provider value={{ user, balance, loading, refreshProfile, updateBalance, updateUser, logout, login, register }}>
             {children}
         </UserContext.Provider>
     );

@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import { UserProvider } from './context/UserContext'
 import { TaskProvider } from './context/TaskContext'
+import { EditorProvider } from './context/EditorContext'
 import App from './App'
 
 createRoot(document.getElementById('root')).render(
@@ -11,7 +12,9 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <UserProvider>
         <TaskProvider>
-          <App />
+          <EditorProvider>
+            <App />
+          </EditorProvider>
         </TaskProvider>
       </UserProvider>
     </BrowserRouter>
