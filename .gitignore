@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Env (локальные ключи / base URL)
+.env
+.env.local
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

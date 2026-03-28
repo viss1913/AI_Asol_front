@@ -1,8 +1,22 @@
 import axios from 'axios';
 
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'https://video-studio-ai-asol-back-production.up.railway.app/api/v1',
+    baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
 });
+
+/** Turn relative upload paths into a URL the browser can load (dev proxy / prod origin). */
+function toAbsoluteAssetUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    if (/^https?:\/\//i.test(url) || url.startsWith('blob:')) return url;
+    const base = import.meta.env.VITE_API_BASE_URL || '';
+    const path = url.startsWith('/') ? url : `/${url}`;
+    if (!base || base.startsWith('/')) return path;
+    try {
+        return new URL(path, new URL(base).origin).href;
+    } catch {
+        return path;
+    }
+}
 
 // Interceptor to add auth token
 api.interceptors.request.use((config) => {
@@ -42,6 +56,10 @@ export const authService = {
     },
     resetPassword: async (token, newPassword) => {
         const response = await api.post('/auth/reset-password', { token, newPassword });
+        return response.data;
+    },
+    getTransactions: async () => {
+        const response = await api.get('/auth/transactions');
         return response.data;
     },
 };
@@ -85,24 +103,62 @@ export const contentService = {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('type', 'image');
-        const response = await api.post('/upload', formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data',
-            },
-        });
-        return response.data;
+        // Do not set Content-Type — browser must add multipart boundary
+        const response = await api.post('/upload', formData);
+        const raw = response.data || {};
+        const url =
+            raw.url ??
+            raw.fileUrl ??
+            (raw.data && (typeof raw.data === 'string' ? raw.data : raw.data.url));
+        if (!url) {
+            const msg = raw.error || raw.message || 'Сервер не вернул ссылку на файл';
+            throw new Error(msg);
+        }
+        return { ...raw, url: toAbsoluteAssetUrl(url) };
     },
     fetchAssets: async (type = null) => {
         const params = type ? { type } : {};
         const response = await api.get('/assets', { params });
         return response.data;
     },
+    fetchVisuals: async () => {
+        const response = await api.get('/assets/visuals');
+        return response.data;
+    },
+    fetchHistory: async () => {
+        const response = await api.get('/assets/all');
+        return response.data;
+    },
+    deleteAsset: async (id) => {
+        const response = await api.delete(`/assets/${id}`);
+        return response.data;
+    },
 };
 
 export const chatService = {
-    sendMessage: async (message, chatId, projectId, model) => {
-        const response = await api.post('/chat/send', { message, chatId, projectId, model });
-        return response.data;
+    sendMessage: async (message, chatId, projectId, model, file) => {
+        const formData = new FormData();
+        formData.append('message', message || '');
+        if (chatId) formData.append('chatId', chatId);
+        if (projectId) formData.append('projectId', projectId);
+        if (model) formData.append('model', model);
+        if (file) formData.append('file', file);
+
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${api.defaults.baseURL}/chat/send`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw { response: { status: response.status, data: errorData } };
+        }
+
+        return await response.json();
     },
     getChats: async () => {
         const response = await api.get('/chat/list');
@@ -122,6 +178,10 @@ export const paymentService = {
     initPayment: async (amount) => {
         const response = await api.post('/payments/init', { amount });
         return response.data; // { paymentUrl, paymentId }
+    },
+    getHistory: async () => {
+        const response = await api.get('/payments/history');
+        return response.data;
     },
 };
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Upload, Grid, Image as ImageIcon, Video, Loader2, Sparkles } from 'lucide-react';
 import { contentService } from '../../services/api';
+import { getEmbedMediaUrl } from '../../utils/proxyUtils';
 
 const MediaGalleryModal = ({ isOpen, onClose, onSelect, onUploadClick, title = "Выберите изображение" }) => {
     const [assets, setAssets] = useState([]);
@@ -18,7 +19,7 @@ const MediaGalleryModal = ({ isOpen, onClose, onSelect, onUploadClick, title = "
         setLoading(true);
         setError(null);
         try {
-            const data = await contentService.fetchAssets();
+            const data = await contentService.fetchVisuals();
             setAssets(data.data || []);
         } catch (err) {
             console.error("Failed to fetch assets:", err);
@@ -64,41 +65,54 @@ const MediaGalleryModal = ({ isOpen, onClose, onSelect, onUploadClick, title = "
                     </button>
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6 min-h-[300px] custom-scrollbar">
-                    {loading ? (
-                        <div className="flex flex-col items-center justify-center py-20">
-                            <Loader2 className="animate-spin text-indigo-500 mb-4" size={40} />
-                            <p className="text-slate-500 font-bold">Загрузка ваших ассетов...</p>
+                {/* Content — загрузка с устройства всегда доступна, даже если список из API не подгрузился */}
+                <div className="flex-1 overflow-y-auto p-6 min-h-[300px] custom-scrollbar space-y-4">
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onUploadClick(); }}
+                        className="w-full flex flex-row sm:flex-col sm:aspect-auto items-center justify-center gap-3 sm:gap-2 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 hover:bg-white hover:border-indigo-400 hover:shadow-lg transition-all group py-4 sm:py-8"
+                    >
+                        <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-slate-400 group-hover:text-indigo-500 transition-all shrink-0">
+                            <Upload size={20} />
                         </div>
-                    ) : error ? (
-                        <div className="text-center py-20">
-                            <p className="text-red-500 font-bold mb-4">{error}</p>
-                            <button onClick={fetchAssets} className="text-indigo-600 font-bold underline">Попробовать снова</button>
+                        <div className="text-left sm:text-center">
+                            <span className="text-xs font-bold text-slate-700 block">Загрузить с устройства</span>
+                            <span className="text-[10px] text-slate-400">Файл с телефона или компа</span>
                         </div>
-                    ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-4">
-                            {/* Upload Tile - Always First */}
-                            <button
-                                onClick={onUploadClick}
-                                className="flex flex-col items-center justify-center aspect-square rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 hover:bg-white hover:border-indigo-400 hover:shadow-lg transition-all group"
-                            >
-                                <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-slate-400 group-hover:text-indigo-500 transition-all mb-2">
-                                    <Upload size={20} />
-                                </div>
-                                <span className="text-xs font-bold text-slate-700">Загрузить</span>
-                                <span className="text-[10px] text-slate-400 mt-1">Локальный файл</span>
-                            </button>
+                    </button>
 
-                            {/* Gallery Assets */}
+                    {loading && (
+                        <div className="flex flex-col items-center justify-center py-12">
+                            <Loader2 className="animate-spin text-indigo-500 mb-3" size={32} />
+                            <p className="text-slate-500 font-bold text-sm">Подгружаем галерею...</p>
+                        </div>
+                    )}
+
+                    {error && (
+                        <div className="rounded-2xl border border-red-100 bg-red-50/80 p-4 text-center">
+                            <p className="text-red-600 font-bold text-sm mb-2">{error}</p>
+                            <button type="button" onClick={fetchAssets} className="text-indigo-600 font-bold text-sm underline">
+                                Обновить список
+                            </button>
+                        </div>
+                    )}
+
+                    {!loading && !error && assets.length === 0 && (
+                        <div className="text-center py-8 opacity-60">
+                            <p className="text-sm font-medium text-slate-400">В галерее пока пусто — загрузите файл кнопкой выше</p>
+                        </div>
+                    )}
+
+                    {!loading && !error && assets.length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-4">
                             {assets.map((asset) => (
                                 <div
                                     key={asset.id}
-                                    onClick={() => onSelect(asset.previewUrl || asset.resultUrl)}
+                                    onClick={() => onSelect(asset.url)}
                                     className="group relative aspect-square rounded-2xl overflow-hidden cursor-pointer border border-slate-100 hover:border-indigo-400 hover:shadow-lg transition-all"
                                 >
                                     <img
-                                        src={asset.previewUrl || asset.resultUrl}
+                                        src={getEmbedMediaUrl(asset.url)}
                                         alt={asset.prompt}
                                         className="w-full h-full object-cover transition-transform group-hover:scale-110"
                                     />
@@ -115,12 +129,6 @@ const MediaGalleryModal = ({ isOpen, onClose, onSelect, onUploadClick, title = "
                                     </div>
                                 </div>
                             ))}
-                        </div>
-                    )}
-
-                    {!loading && !error && assets.length === 0 && (
-                        <div className="text-center py-10 opacity-50">
-                            <p className="text-sm font-medium text-slate-400">Галерея пока пуста, но вы можете загрузить файл выше</p>
                         </div>
                     )}
                 </div>

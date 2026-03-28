@@ -1,5 +1,4 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
 import Header from './components/layout/Header';
 import Landing from './pages/Landing';
 import Home from './pages/Home';
@@ -15,6 +14,8 @@ import AudioGeneration from './pages/AudioGeneration';
 import VideoEditor from './pages/VideoEditor';
 import CookieConsent from './components/common/CookieConsent';
 import Dashboard from './pages/Dashboard';
+import Gallery from './pages/Gallery';
+import Transactions from './pages/Transactions';
 
 import { useUser } from './context/UserContext';
 
@@ -42,7 +43,6 @@ function App() {
   }
 
   const isChat = location.pathname.startsWith('/chat');
-  const isLanding = location.pathname === '/';
 
   return (
     <div className={`min-h-screen bg-white ${isChat ? 'h-screen overflow-hidden' : ''}`}>
@@ -111,13 +111,23 @@ function App() {
             </ProtectedRoute>
           } />
 
+          <Route path="/gallery" element={
+            <ProtectedRoute>
+              <Gallery />
+            </ProtectedRoute>
+          } />
+
           <Route path="/chat" element={
             <ProtectedRoute>
               <Chat />
             </ProtectedRoute>
           } />
 
-          {/* Projects route removed as per request */}
+          <Route path="/transactions" element={
+            <ProtectedRoute>
+              <Transactions />
+            </ProtectedRoute>
+          } />
 
           {/* Redirect any other route to landing or home */}
           <Route path="*" element={<Navigate to="/" replace />} />

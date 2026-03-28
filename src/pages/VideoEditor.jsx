@@ -4,17 +4,18 @@ import AddMediaModal from '../components/editor/AddMediaModal';
 import Timeline from '../components/editor/Timeline';
 import VideoPreview from '../components/editor/VideoPreview';
 import { useEditor } from '../context/EditorContext';
-import ffmpegService from '../services/ffmpegService';
 import { downloadBlob } from '../utils/editorUtils';
+import { getProxyUrl } from '../utils/proxyUtils';
+import api from '../services/api';
 
-const VideoEditor = () => {
-    const { clips, clearTimeline, addClip } = useEditor();
+export default function VideoEditor() {
+    const { addClips, clips, clearTimeline, addClip } = useEditor();
     const [exporting, setExporting] = useState(false);
     const [exportProgress, setExportProgress] = useState(0);
     const [isAddMediaModalOpen, setIsAddMediaModalOpen] = useState(false);
 
     const handleAddMedia = (mediaData) => {
-        addClip(mediaData);
+        addClips(mediaData);
     };
 
     const handleExport = async () => {
@@ -26,52 +27,58 @@ const VideoEditor = () => {
         setExporting(true);
         setExportProgress(0);
 
+        const videoClips = clips.filter(c => c.type === 'video');
+
+        if (videoClips.length === 0) {
+            alert('Нет видеоклипов для экспорта');
+            setExporting(false);
+            return;
+        }
+
         try {
-            await ffmpegService.load();
+            console.log('[Export] Sending to server for concat...');
+            setExportProgress(10);
 
-            const videoClips = clips.filter(c => c.type === 'video');
-            const processedClips = [];
-
-            // Process each clip (trim if needed)
-            for (let i = 0; i < videoClips.length; i++) {
-                const clip = videoClips[i];
-                setExportProgress(Math.round((i / videoClips.length) * 50));
-
-                // Fetch the clip
-                const response = await fetch(clip.url);
-                const blob = await response.blob();
-                const inputName = `input_${i}.mp4`;
-                await ffmpegService.writeFile(inputName, blob);
-
-                // Trim if needed
-                if (clip.trimStart > 0 || clip.trimEnd < clip.duration) {
-                    const trimmedName = `trimmed_${i}.mp4`;
-                    await ffmpegService.trim(
-                        inputName,
-                        trimmedName,
-                        clip.trimStart || 0,
-                        clip.trimEnd || clip.duration
-                    );
-                    processedClips.push(trimmedName);
-                } else {
-                    processedClips.push(inputName);
+            // Prepare data for backend
+            const urls = videoClips.map(c => c.url);
+            const trimSettings = videoClips.map(c => {
+                if (c.trimStart > 0 || c.trimEnd < c.duration) {
+                    return { start: c.trimStart || 0, end: c.trimEnd || c.duration };
                 }
+                return null;
+            });
+
+            console.log('[Export] URLs:', urls);
+            console.log('[Export] Trim settings:', trimSettings);
+
+            setExportProgress(20);
+
+            // Call backend concat API
+            const response = await api.post('/videos/concat', { urls, trimSettings });
+
+            if (!response.data.success) {
+                throw new Error(response.data.error || 'Server concat failed');
             }
 
-            setExportProgress(60);
+            const resultUrl = response.data.url;
+            console.log('[Export] ✅ Server concat done:', resultUrl);
+            setExportProgress(80);
 
-            // Concatenate all clips
-            const outputBlob = await ffmpegService.concat(processedClips, 'output.mp4');
+            // Download the result
+            console.log('[Export] Downloading result...');
+            const downloadResponse = await fetch(getProxyUrl(resultUrl));
+            if (!downloadResponse.ok) throw new Error(`Download failed: ${downloadResponse.status}`);
+
+            const blob = await downloadResponse.blob();
+            console.log(`[Export] ✅ Downloaded (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
 
             setExportProgress(100);
-
-            // Download
-            downloadBlob(outputBlob, `video_${Date.now()}.mp4`);
+            downloadBlob(blob, `video_${Date.now()}.mp4`);
 
             alert('✅ Видео успешно экспортировано!');
         } catch (error) {
-            console.error('Export failed:', error);
-            alert('❌ Ошибка при экспорте: ' + error.message);
+            console.error('[Export] ❌ Export failed:', error);
+            alert('❌ Ошибка при экспорте: ' + (error.response?.data?.error || error.message));
         } finally {
             setExporting(false);
             setExportProgress(0);
@@ -149,5 +156,5 @@ const VideoEditor = () => {
     );
 };
 
-export default VideoEditor;
+
 

@@ -3,6 +3,7 @@ import { Upload, Video, Music, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { historyService } from '../../services/api';
 import { validateFile, getVideoMetadata } from '../../utils/editorUtils';
 import { useEditor } from '../../context/EditorContext';
+import { getProxyUrl } from '../../utils/proxyUtils';
 
 const MediaLibrary = () => {
     const { addClip } = useEditor();
@@ -74,26 +75,42 @@ const MediaLibrary = () => {
     };
 
     const addToTimeline = async (item) => {
+        console.log('[MediaLibrary] Adding to timeline:', item);
         try {
             // Fetch video metadata if needed
             let duration = 0;
             if (item.type === 'video') {
-                const response = await fetch(item.url || item.video_url);
+                const mediaUrl = item.url || item.video_url || item.result?.[0];
+                const proxiedUrl = getProxyUrl(mediaUrl);
+                console.log(`[MediaLibrary] Fetching metadata from: ${proxiedUrl}`);
+
+                const response = await fetch(proxiedUrl, { mode: 'cors' });
+                if (!response.ok) throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
+
                 const blob = await response.blob();
                 const metadata = await getVideoMetadata(blob);
                 duration = metadata.duration;
+                console.log(`[MediaLibrary] Got duration: ${duration}`);
+            }
+
+            // Extract prompt safely
+            let promptText = 'Без названия';
+            if (item.prompt) {
+                promptText = typeof item.prompt === 'object' ? (item.prompt.text || item.prompt.prompt || JSON.stringify(item.prompt)) : item.prompt;
             }
 
             addClip({
                 type: item.type,
                 url: item.url || item.video_url || item.result?.[0],
-                name: item.prompt || 'Без названия',
+                name: promptText,
                 duration,
                 source: 'history',
                 historyId: item.id
             });
+            console.log('[MediaLibrary] Successfully added clip to editor');
         } catch (error) {
-            console.error('Failed to add to timeline:', error);
+            console.error('[MediaLibrary] Failed to add to timeline:', error);
+            alert(`Ошибка при добавлении видео: ${error.message}`);
         }
     };
 
@@ -157,7 +174,7 @@ const MediaLibrary = () => {
                                     <Music size={14} className="text-purple-600" />
                                 )}
                                 <span className="text-[11px] font-bold text-slate-900 truncate flex-1">
-                                    {item.prompt || 'Без названия'}
+                                    {typeof item.prompt === 'object' ? (item.prompt.text || item.prompt.prompt || JSON.stringify(item.prompt)) : (item.prompt || 'Без названия')}
                                 </span>
                             </div>
                             <p className="text-[9px] text-slate-500">

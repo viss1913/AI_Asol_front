@@ -1,7 +1,6 @@
-import { LayoutDashboard, FileVideo, Wallet, User as UserIcon, LogIn, LogOut, MessageSquare, BookOpen, Menu, X } from 'lucide-react';
+import { LayoutDashboard, FileVideo, Wallet, User as UserIcon, LogIn, LogOut, MessageSquare, BookOpen, Menu, X, ReceiptText } from 'lucide-react';
 import { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { authService } from '../../services/api';
+import { Link, useLocation } from 'react-router-dom';
 import { useUser } from '../../context/UserContext';
 import logo from '../../assets/logo.jpg';
 
@@ -9,7 +8,6 @@ const Navbar = () => {
   const { balance } = useUser();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
-  const navigate = useNavigate();
   const isAuthenticated = !!localStorage.getItem('token');
 
   // Динамические пункты меню в зависимости от авторизации
@@ -74,6 +72,10 @@ const Navbar = () => {
         <div className="flex items-center gap-4">
           {isAuthenticated ? (
             <>
+              <Link to="/transactions" className="hidden sm:flex items-center gap-2 text-slate-400 hover:text-indigo-600 transition-colors mr-2" title="История списаний">
+                <ReceiptText size={16} />
+              </Link>
+
               <div className="hidden sm:flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
                 <Wallet size={14} className="text-indigo-500" />
                 <span className="text-xs font-black text-slate-800 tracking-tighter">{balance.toLocaleString()} ₽</span>

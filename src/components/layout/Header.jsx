@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { MessageSquare, Video, Image as ImageIcon, Mic, Music, PenTool, LogOut, LayoutDashboard, User, Plus, Film, Menu, X } from 'lucide-react';
+import { MessageSquare, Video, Image as ImageIcon, Mic, Music, PenTool, LogOut, LayoutDashboard, User, Plus, Film, Menu, X, Grid } from 'lucide-react';
 import { useUser } from '../../context/UserContext';
 import { authService } from '../../services/api';
 import TopUpModal from '../TopUpModal';
+import UserProfileMenu from './UserProfileMenu';
 import logo from '../../assets/logo.jpg';
 
 const Header = () => {
@@ -19,6 +20,7 @@ const Header = () => {
     };
 
     const navItems = [
+        { id: 'gallery', label: 'Моя галерея', icon: <Grid size={18} />, path: '/gallery', disabled: false },
         { id: 'chat', label: 'Чат', icon: <MessageSquare size={18} />, path: '/chat', disabled: false },
         { id: 'video', label: 'Видео', icon: <Video size={18} />, path: '/video', disabled: false },
         { id: 'image', label: 'Изображения', icon: <ImageIcon size={18} />, path: '/image', disabled: false },
@@ -102,9 +104,7 @@ const Header = () => {
                                 </button>
                             </div>
                             <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold border-2 border-white shadow-sm">
-                                    {user.username?.[0]?.toUpperCase() || <User size={16} />}
-                                </div>
+                                <UserProfileMenu user={user} />
                                 <button
                                     onClick={handleLogout}
                                     className="hidden md:flex p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"

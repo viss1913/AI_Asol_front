@@ -50,6 +50,18 @@ body {
   background-image: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
 }
 
+@utility sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 @keyframes float {
   0% {
     transform: translateY(0px);
@@ -156,4 +168,52 @@ input[type="range"]::-moz-range-thumb {
 input[type="range"]::-moz-range-thumb:active {
   cursor: grabbing;
   transform: scale(1.1);
+}
+
+/* Markdown styles for Chat */
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+  @apply font-black text-slate-900 mt-4 mb-2;
+}
+
+.markdown-content h1 {
+  @apply text-xl;
+}
+
+.markdown-content h2 {
+  @apply text-lg;
+}
+
+.markdown-content h3 {
+  @apply text-base;
+}
+
+.markdown-content p {
+  @apply mb-3 last:mb-0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  @apply pl-5 mb-4 space-y-1;
+}
+
+.markdown-content ul {
+  list-style-type: disc;
+}
+
+.markdown-content ol {
+  list-style-type: decimal;
+}
+
+.markdown-content strong {
+  @apply font-black text-indigo-600;
+}
+
+.markdown-content code {
+  @apply bg-slate-100 px-1.5 py-0.5 rounded text-indigo-600 font-mono text-sm;
+}
+
+.markdown-content blockquote {
+  @apply border-l-4 border-indigo-200 pl-4 italic text-slate-500 my-4;
 }

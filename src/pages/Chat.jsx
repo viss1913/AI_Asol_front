@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { chatService, projectService } from '../services/api';
+import { chatService } from '../services/api';
+import { getProxyUrl } from '../utils/proxyUtils';
 import { useUser } from '../context/UserContext';
-import { Send, User, Bot, Sparkles, MessageSquare, Plus, Loader2, ChevronLeft, Trash2, Folder, X } from 'lucide-react';
+import { Send, User, Bot, MessageSquare, Loader2, Trash2, X, Paperclip, FileText, Download } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import avatarBase from '../assets/avatar.png';
@@ -17,7 +17,9 @@ const Chat = () => {
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-    const [chatModel, setChatModel] = useState('gemini-3-flash');
+    const chatModel = 'gemini-3.1-flash-lite-preview';
+    const [selectedFile, setSelectedFile] = useState(null);
+    const fileInputRef = useRef(null);
 
     const messagesEndRef = useRef(null);
 
@@ -56,7 +58,9 @@ const Chat = () => {
                 id: m.id,
                 role: m.role,
                 content: m.content,
-                cost: m.cost
+                cost: m.cost,
+                fileUrl: m.fileUrl,
+                fileName: m.fileName
             })));
         } catch (err) {
             console.error("Failed to load history:", err);
@@ -85,17 +89,47 @@ const Chat = () => {
         setMessages([]); // Clear to show the pretty empty state
     };
 
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Validation
+        const allowedExtensions = ['pdf', 'doc', 'docx'];
+        const extension = file.name.split('.').pop().toLowerCase();
+        if (!allowedExtensions.includes(extension)) {
+            alert('Неподдерживаемый формат файла. Пожалуйста, выберите PDF, DOC или DOCX.');
+            return;
+        }
+
+        if (file.size > 20 * 1024 * 1024) {
+            alert('Файл слишком большой. Максимальный размер — 20 МБ.');
+            return;
+        }
+
+        setSelectedFile(file);
+    };
+
     const handleSend = async (e) => {
         e.preventDefault();
-        if (!input.trim() || loading) return;
+        if ((!input.trim() && !selectedFile) || loading) return;
 
-        const userMessage = { id: Date.now(), role: 'user', content: input };
+        const userMessage = {
+            id: Date.now(),
+            role: 'user',
+            content: input,
+            fileName: selectedFile?.name
+        };
         setMessages(prev => [...prev, userMessage]);
+
+        const currentMessage = input;
+        const currentFile = selectedFile;
+
         setInput('');
+        setSelectedFile(null);
         setLoading(true);
 
         try {
-            const data = await chatService.sendMessage(input, currentChatId, undefined, chatModel);
+            const data = await chatService.sendMessage(currentMessage, currentChatId, undefined, chatModel, currentFile);
 
             if (data.newBalance !== undefined) {
                 updateBalance(data.newBalance);
@@ -110,7 +144,9 @@ const Chat = () => {
                 id: Date.now() + 1,
                 role: 'assistant',
                 content: data.message.content,
-                cost: data.cost
+                cost: data.cost,
+                fileUrl: data.message.fileUrl || data.generatedFileUrl,
+                fileName: data.message.fileName
             }]);
         } catch (err) {
             if (err.response?.status === 403 && err.response?.data?.requireTopUp) {
@@ -232,18 +268,7 @@ const Chat = () => {
                                 <h2 className="text-base font-black text-slate-900 leading-tight">Ассоль</h2>
                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             </div>
-                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">AI Assistant</span>
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                            <select
-                                value={chatModel}
-                                onChange={(e) => setChatModel(e.target.value)}
-                                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1 text-xs font-bold text-slate-600 outline-none cursor-pointer focus:border-indigo-500 transition-all"
-                            >
-                                <option value="gemini-3-flash">Gemini 3 Flash</option>
-                                <option value="gemini-3-pro">Gemini 3 Pro</option>
-                            </select>
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">AI Assistant (Gemini 3.1)</span>
                         </div>
                     </div>
                 </div>
@@ -293,7 +318,34 @@ const Chat = () => {
                                             ? 'bg-slate-100 text-slate-900 rounded-tr-none font-medium'
                                             : 'bg-white text-slate-800 border border-slate-100 rounded-tl-none font-normal'
                                             }`}>
-                                            <p className="whitespace-pre-wrap">{msg.content}</p>
+                                            <div className="markdown-content prose prose-slate max-w-none">
+                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                    {msg.content}
+                                                </ReactMarkdown>
+                                            </div>
+
+                                            {msg.fileUrl && (
+                                                <div className="mt-3 p-3 bg-slate-50 border border-slate-100 rounded-xl flex items-center gap-3 group/file hover:bg-white transition-all">
+                                                    <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-500">
+                                                        <FileText size={20} />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-xs font-bold text-slate-700 truncate">{msg.fileName || 'Документ'}</p>
+                                                        <p className="text-[10px] text-slate-400 font-medium">
+                                                            {msg.role === 'user' ? 'Анализируемый документ' : 'Сгенерированный документ'}
+                                                        </p>
+                                                    </div>
+                                                    <a
+                                                        href={getProxyUrl(msg.fileUrl)}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
+                                                        title="Скачать"
+                                                    >
+                                                        <Download size={16} />
+                                                    </a>
+                                                </div>
+                                            )}
 
                                             <button
                                                 onClick={() => navigator.clipboard.writeText(msg.content)}
@@ -332,6 +384,31 @@ const Chat = () => {
 
                 {/* Input Area */}
                 <div className="px-6 py-4 border-t border-slate-50 bg-white/80 backdrop-blur-md">
+                    <div className="max-w-4xl mx-auto mb-3">
+                        {selectedFile && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="flex items-center gap-3 bg-indigo-50 border border-indigo-100 p-3 rounded-2xl w-fit shadow-sm"
+                            >
+                                <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-indigo-500 shadow-sm">
+                                    <FileText size={16} />
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-xs font-bold text-slate-700 max-w-[200px] truncate">{selectedFile.name}</span>
+                                    <span className="text-[10px] text-slate-400 font-medium">Готов к отправке</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedFile(null)}
+                                    className="ml-2 p-1.5 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all"
+                                >
+                                    <X size={16} />
+                                </button>
+                            </motion.div>
+                        )}
+                    </div>
+
                     <form onSubmit={handleSend} className="max-w-4xl mx-auto relative flex items-center gap-3">
                         <div className="relative flex-1">
                             <input
@@ -343,6 +420,20 @@ const Chat = () => {
                                 className="w-full pl-6 pr-12 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all font-bold text-slate-700 shadow-sm text-sm"
                             />
                             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleFileChange}
+                                    className="hidden"
+                                    accept=".pdf,.doc,.docx"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className={`p-2 transition-colors ${selectedFile ? 'text-indigo-500' : 'text-slate-300 hover:text-indigo-500'}`}
+                                >
+                                    <Paperclip size={18} />
+                                </button>
                                 <button
                                     type="button"
                                     className="p-2 text-slate-300 hover:text-indigo-500 transition-colors"
@@ -353,7 +444,7 @@ const Chat = () => {
                         </div>
                         <button
                             type="submit"
-                            disabled={!input.trim() || loading}
+                            disabled={(!input.trim() && !selectedFile) || loading}
                             className="bg-slate-900 text-white p-4 rounded-2xl hover:bg-indigo-600 transition-all shadow-xl disabled:opacity-30 disabled:hover:bg-slate-900 active:scale-95 flex-shrink-0"
                         >
                             {loading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}

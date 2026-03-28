@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
-import { Sparkles, Image as ImageIcon, Video, Wand2, Download, Share2, CornerUpLeft, Upload as UploadIcon, AlertCircle, Clock, Volume2, VolumeX, Maximize2, Zap, Loader2 } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, Video, Wand2, Download, Share2, CornerUpLeft, Upload as UploadIcon, AlertCircle, Clock, Volume2, VolumeX, Maximize2, Zap, Loader2, Grid3x3 } from 'lucide-react';
 import Button from '../components/common/Button';
 import { contentService, projectService, historyService, configService } from '../services/api';
 import { useUser } from '../context/UserContext';
 import { useTasks } from '../context/TaskContext';
 import { Folder, Plus, CreditCard, X } from 'lucide-react';
 import MediaGalleryModal from '../components/editor/MediaGalleryModal';
+import { getEmbedMediaUrl } from '../utils/proxyUtils';
 
 const Editor = ({ defaultTab }) => {
     const { updateBalance } = useUser();
@@ -45,6 +46,8 @@ const Editor = ({ defaultTab }) => {
     const [uploadingEnd, setUploadingEnd] = useState(false);
     const [showGalleryModal, setShowGalleryModal] = useState(false);
     const [activeGallerySlot, setActiveGallerySlot] = useState('main'); // 'main' or 'end'
+    const [refPreviewFailed, setRefPreviewFailed] = useState(false);
+    const [endPreviewFailed, setEndPreviewFailed] = useState(false);
 
     // Calculate video cost when model or options change
     useEffect(() => {
@@ -93,6 +96,14 @@ const Editor = ({ defaultTab }) => {
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [isGenerating]);
 
+    useEffect(() => {
+        setRefPreviewFailed(false);
+    }, [imageUrl]);
+
+    useEffect(() => {
+        setEndPreviewFailed(false);
+    }, [imageEndUrl]);
+
     const fetchProjects = async () => {
         try {
             const data = await projectService.list();
@@ -126,6 +137,7 @@ const Editor = ({ defaultTab }) => {
         const file = e.target ? e.target.files[0] : e; // Handle both event and raw file
         if (!file) return;
 
+        setShowGalleryModal(false);
         if (type === 'end') setUploadingEnd(true);
         else setUploading(true);
 
@@ -136,11 +148,18 @@ const Editor = ({ defaultTab }) => {
             else setImageUrl(data.url);
         } catch (err) {
             console.error("Upload failed:", err);
-            setError("Ошибка загрузки файла. Попробуйте снова.");
+            const status = err.response?.status;
+            const serverMsg = err.response?.data?.error || err.response?.data?.message;
+            if (status === 401) {
+                setError('Войдите в аккаунт — без авторизации файлы не загрузить.');
+            } else {
+                setError(serverMsg || err.message || 'Ошибка загрузки файла. Попробуйте снова.');
+            }
         } finally {
             if (type === 'end') setUploadingEnd(false);
             else setUploading(false);
-            setShowGalleryModal(false); // Close modal after upload
+            const input = type === 'end' ? endFileInputRef.current : fileInputRef.current;
+            if (input) input.value = '';
         }
     };
 
@@ -280,7 +299,7 @@ const Editor = ({ defaultTab }) => {
                                                 <div className="grid grid-cols-1 gap-3">
                                                     {[
                                                         { id: 'google/nano-banana', name: 'Nano Banana', desc: 'Стандартная генерация' },
-                                                        { id: 'nano-banana-pro', name: 'Banana Pro', desc: 'Максимальное качество и детализация' }
+                                                        { id: 'banana-pro', name: 'Banana Pro', desc: 'Максимальное качество и детализация' }
                                                     ].map(m => (
                                                         <div key={m.id} className="space-y-3">
                                                             <button
@@ -459,17 +478,26 @@ const Editor = ({ defaultTab }) => {
                             <div className={`grid gap-4 ${videoModel.startsWith('veo') && activeTab === 'video' ? 'grid-cols-2' : 'grid-cols-1'}`}>
                                 {/* Slot 1: Start Frame / Reference */}
                                 <section
-                                    onClick={() => openGallery('main')}
+                                    onClick={() => !uploading && fileInputRef.current?.click()}
                                     className="bg-slate-50 border-2 border-dashed border-slate-200 p-4 rounded-3xl group hover:border-[#6366f1] transition-all cursor-pointer overflow-hidden relative"
                                 >
                                     <input
                                         type="file"
                                         ref={fileInputRef}
                                         onChange={(e) => handleFileUpload(e, 'main')}
-                                        accept="image/*"
+                                        accept="image/*,.heic,.heif"
                                         className="hidden"
                                     />
-                                    <div className="flex items-center gap-3 mb-3">
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); openGallery('main'); }}
+                                        className="absolute top-3 right-3 z-10 flex items-center gap-1 rounded-xl bg-white/90 px-2 py-1.5 text-[10px] font-bold text-indigo-600 shadow-sm border border-slate-100 hover:bg-indigo-50"
+                                        title="Выбрать из галереи"
+                                    >
+                                        <Grid3x3 size={14} />
+                                        Галерея
+                                    </button>
+                                    <div className="flex items-center gap-3 mb-3 pr-20">
                                         <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-slate-400 group-hover:text-[#6366f1] transition-all shadow-sm">
                                             {uploading ? <Loader2 size={20} className="animate-spin text-indigo-500" /> : <UploadIcon size={20} />}
                                         </div>
@@ -478,7 +506,7 @@ const Editor = ({ defaultTab }) => {
                                                 {activeTab === 'image' ? 'Референс' : (videoModel.startsWith('veo') ? 'Старт' : 'Референс')}
                                             </p>
                                             <p className="text-[10px] text-slate-400 font-medium">
-                                                {uploading ? 'Загрузка...' : 'Нажмите для выбора'}
+                                                {uploading ? 'Загрузка...' : 'Нажмите — файл с устройства'}
                                             </p>
                                         </div>
                                     </div>
@@ -491,14 +519,36 @@ const Editor = ({ defaultTab }) => {
                                         onClick={(e) => e.stopPropagation()}
                                     />
                                     {imageUrl && (
-                                        <div className="mt-3 relative h-24 rounded-xl overflow-hidden border border-slate-200">
-                                            <img src={imageUrl} alt="Ref" className="w-full h-full object-cover" />
+                                        <div className="mt-3 relative h-24 rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                                            {refPreviewFailed ? (
+                                                <div className="flex h-full items-center justify-center px-2 text-center text-[10px] font-medium text-slate-500">
+                                                    Не удалось показать превью — ссылка всё равно уйдёт в генерацию
+                                                </div>
+                                            ) : (
+                                                <img
+                                                    src={getEmbedMediaUrl(imageUrl)}
+                                                    alt="Референс"
+                                                    className="w-full h-full object-contain bg-slate-900/5"
+                                                    loading="lazy"
+                                                    decoding="async"
+                                                    onError={() => setRefPreviewFailed(true)}
+                                                />
+                                            )}
                                             <button
+                                                type="button"
                                                 onClick={(e) => { e.stopPropagation(); setImageUrl(''); }}
                                                 className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full hover:bg-black"
+                                                title="Убрать"
                                             >
                                                 <VolumeX size={10} />
                                             </button>
+                                        </div>
+                                    )}
+                                    {uploading && (
+                                        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 rounded-3xl bg-white/85 backdrop-blur-[2px] border border-indigo-100/50 shadow-inner">
+                                            <Loader2 className="animate-spin text-indigo-500" size={36} strokeWidth={2.5} />
+                                            <p className="text-sm font-bold text-slate-700 px-4 text-center">Загружаем картинку…</p>
+                                            <p className="text-[10px] font-medium text-slate-400">Подожди пару секунд</p>
                                         </div>
                                     )}
                                 </section>
@@ -506,24 +556,33 @@ const Editor = ({ defaultTab }) => {
                                 {/* Slot 2: End Frame (Only for Veo) */}
                                 {activeTab === 'video' && videoModel.startsWith('veo') && (
                                     <section
-                                        onClick={() => openGallery('end')}
+                                        onClick={() => !uploadingEnd && endFileInputRef.current?.click()}
                                         className="bg-slate-50 border-2 border-dashed border-slate-200 p-4 rounded-3xl group hover:border-[#6366f1] transition-all cursor-pointer overflow-hidden relative"
                                     >
                                         <input
                                             type="file"
                                             ref={endFileInputRef}
                                             onChange={(e) => handleFileUpload(e, 'end')}
-                                            accept="image/*"
+                                            accept="image/*,.heic,.heif"
                                             className="hidden"
                                         />
-                                        <div className="flex items-center gap-3 mb-3">
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); openGallery('end'); }}
+                                            className="absolute top-3 right-3 z-10 flex items-center gap-1 rounded-xl bg-white/90 px-2 py-1.5 text-[10px] font-bold text-indigo-600 shadow-sm border border-slate-100 hover:bg-indigo-50"
+                                            title="Выбрать из галереи"
+                                        >
+                                            <Grid3x3 size={14} />
+                                            Галерея
+                                        </button>
+                                        <div className="flex items-center gap-3 mb-3 pr-20">
                                             <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-slate-400 group-hover:text-[#6366f1] transition-all shadow-sm">
                                                 {uploadingEnd ? <Loader2 size={20} className="animate-spin text-indigo-500" /> : <UploadIcon size={20} />}
                                             </div>
                                             <div>
                                                 <p className="text-sm font-bold text-slate-700">Финиш</p>
                                                 <p className="text-[10px] text-slate-400 font-medium">
-                                                    {uploadingEnd ? 'Загрузка...' : 'Конечный кадр'}
+                                                    {uploadingEnd ? 'Загрузка...' : 'Нажмите — файл с устройства'}
                                                 </p>
                                             </div>
                                         </div>
@@ -536,14 +595,36 @@ const Editor = ({ defaultTab }) => {
                                             onClick={(e) => e.stopPropagation()}
                                         />
                                         {imageEndUrl && (
-                                            <div className="mt-3 relative h-24 rounded-xl overflow-hidden border border-slate-200">
-                                                <img src={imageEndUrl} alt="EndRef" className="w-full h-full object-cover" />
+                                            <div className="mt-3 relative h-24 rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                                                {endPreviewFailed ? (
+                                                    <div className="flex h-full items-center justify-center px-2 text-center text-[10px] font-medium text-slate-500">
+                                                        Не удалось показать превью — ссылка всё равно уйдёт в генерацию
+                                                    </div>
+                                                ) : (
+                                                    <img
+                                                        src={getEmbedMediaUrl(imageEndUrl)}
+                                                        alt="Конечный кадр"
+                                                        className="w-full h-full object-contain bg-slate-900/5"
+                                                        loading="lazy"
+                                                        decoding="async"
+                                                        onError={() => setEndPreviewFailed(true)}
+                                                    />
+                                                )}
                                                 <button
+                                                    type="button"
                                                     onClick={(e) => { e.stopPropagation(); setImageEndUrl(''); }}
                                                     className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full hover:bg-black"
+                                                    title="Убрать"
                                                 >
                                                     <VolumeX size={10} />
                                                 </button>
+                                            </div>
+                                        )}
+                                        {uploadingEnd && (
+                                            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 rounded-3xl bg-white/85 backdrop-blur-[2px] border border-indigo-100/50 shadow-inner">
+                                                <Loader2 className="animate-spin text-indigo-500" size={36} strokeWidth={2.5} />
+                                                <p className="text-sm font-bold text-slate-700 px-4 text-center">Загружаем картинку…</p>
+                                                <p className="text-[10px] font-medium text-slate-400">Подожди пару секунд</p>
                                             </div>
                                         )}
                                     </section>

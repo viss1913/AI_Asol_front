@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { Play, Pause, SkipBack, Film } from 'lucide-react';
 import { useEditor } from '../../context/EditorContext';
 import { formatTime } from '../../utils/editorUtils';
+import { getProxyUrl } from '../../utils/proxyUtils';
 
 const VideoPreview = () => {
     const { clips, currentTime, setCurrentTime, isPlaying, setIsPlaying, play, pause } = useEditor();
@@ -132,10 +133,13 @@ const VideoPreview = () => {
                 {currentClipData && currentClipData.clip ? (
                     <video
                         ref={videoRef}
-                        src={currentClipData.clip.url}
+                        src={getProxyUrl(currentClipData.clip.url)}
                         className="w-full h-full object-contain"
+                        crossOrigin="anonymous"
                         onTimeUpdate={handleTimeUpdate}
                         onEnded={handleVideoEnded}
+                        onLoadedMetadata={() => console.log(`[Preview] Video loaded metadata: ${currentClipData.clip.url}`)}
+                        onError={(e) => console.error(`[Preview] Video error: ${currentClipData.clip.url}`, e)}
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center">

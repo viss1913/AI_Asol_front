@@ -65,6 +65,7 @@ export const getVideoMetadata = (videoFile) => {
         const video = document.createElement('video');
 
         video.addEventListener('loadedmetadata', () => {
+            console.log(`[Metadata] Successfully loaded for blob`);
             const metadata = {
                 duration: video.duration,
                 width: video.videoWidth,
@@ -76,6 +77,7 @@ export const getVideoMetadata = (videoFile) => {
         });
 
         video.addEventListener('error', (e) => {
+            console.error(`[Metadata] Error loading video metadata:`, e);
             URL.revokeObjectURL(video.src);
             reject(e);
         });

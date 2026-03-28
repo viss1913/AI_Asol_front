@@ -8,24 +8,103 @@ class FFmpegService {
     }
 
     async load() {
-        if (this.loaded) return;
+        if (this.loaded) {
+            console.log('FFmpeg already loaded');
+            return;
+        }
 
+        console.log('Loading FFmpeg...');
         try {
+            // Check SharedArrayBuffer support
+            if (typeof SharedArrayBuffer === 'undefined') {
+                throw new Error('SharedArrayBuffer is not available. COOP/COEP headers may be missing.');
+            }
+            console.log('SharedArrayBuffer: ✅ available');
+
             this.ffmpeg = new FFmpeg();
 
-            // Load FFmpeg core
-            const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+            this.ffmpeg.on('log', ({ message }) => {
+                console.log('FFmpeg Log:', message);
+            });
+
+            // Use direct same-origin URLs (files in public/ffmpeg/)
+            console.log('Loading FFmpeg core (direct URLs)...');
             await this.ffmpeg.load({
-                coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-                wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+                coreURL: '/ffmpeg/ffmpeg-core.js',
+                wasmURL: '/ffmpeg/ffmpeg-core.wasm',
             });
 
             this.loaded = true;
-            console.log('FFmpeg loaded successfully');
+            console.log('FFmpeg loaded successfully ✅');
         } catch (error) {
             console.error('Failed to load FFmpeg:', error);
             throw error;
         }
+    }
+
+    async writeFile(fileName, data) {
+        if (!this.loaded) await this.load();
+        await this.ffmpeg.writeFile(fileName, await fetchFile(data));
+    }
+
+    async readFile(fileName) {
+        if (!this.loaded) await this.load();
+        return await this.ffmpeg.readFile(fileName);
+    }
+
+    async deleteFile(fileName) {
+        if (!this.loaded) await this.load();
+        await this.ffmpeg.deleteFile(fileName);
+    }
+
+    async exec(args) {
+        if (!this.loaded) await this.load();
+        return await this.ffmpeg.exec(args);
+    }
+
+    // Pipeline-friendly trim (leaves files on FS)
+    async trim(inputFile, outputFile, startTime, endTime) {
+        if (!this.loaded) await this.load();
+        await this.ffmpeg.exec([
+            '-i', inputFile,
+            '-ss', startTime.toString(),
+            '-to', endTime.toString(),
+            '-c', 'copy',
+            outputFile
+        ]);
+    }
+
+    // Pipeline-friendly concat (leaves files on FS)
+    async concat(inputFiles, outputFile) {
+        if (!this.loaded) await this.load();
+
+        const fileListContent = inputFiles.map(f => `file '${f}'`).join('\n');
+        await this.ffmpeg.writeFile('filelist.txt', fileListContent);
+
+        try {
+            // Try stream copy first (fast, works when codecs match)
+            await this.ffmpeg.exec([
+                '-f', 'concat',
+                '-safe', '0',
+                '-i', 'filelist.txt',
+                '-c', 'copy',
+                '-movflags', '+faststart',
+                outputFile
+            ]);
+        } catch (copyError) {
+            console.warn('[FFmpeg] Stream copy failed, trying re-mux...', copyError);
+            // Fallback: try without audio track
+            await this.ffmpeg.exec([
+                '-f', 'concat',
+                '-safe', '0',
+                '-i', 'filelist.txt',
+                '-c:v', 'copy',
+                '-an',
+                outputFile
+            ]);
+        }
+
+        await this.ffmpeg.deleteFile('filelist.txt');
     }
 
     async trimVideo(videoFile, startTime, endTime) {
@@ -35,24 +114,12 @@ class FFmpegService {
             const inputName = 'input.mp4';
             const outputName = 'output.mp4';
 
-            // Write input file
-            await this.ffmpeg.writeFile(inputName, await fetchFile(videoFile));
+            await this.writeFile(inputName, videoFile);
+            await this.trim(inputName, outputName, startTime, endTime);
+            const data = await this.readFile(outputName);
 
-            // Trim video
-            await this.ffmpeg.exec([
-                '-i', inputName,
-                '-ss', startTime.toString(),
-                '-to', endTime.toString(),
-                '-c', 'copy',
-                outputName
-            ]);
-
-            // Read output
-            const data = await this.ffmpeg.readFile(outputName);
-
-            // Cleanup
-            await this.ffmpeg.deleteFile(inputName);
-            await this.ffmpeg.deleteFile(outputName);
+            await this.deleteFile(inputName);
+            await this.deleteFile(outputName);
 
             return new Blob([data.buffer], { type: 'video/mp4' });
         } catch (error) {
@@ -66,36 +133,20 @@ class FFmpegService {
 
         try {
             const outputName = 'output.mp4';
-            const fileListContent = [];
-
-            // Write all input files
+            // Write files
+            const filenames = [];
             for (let i = 0; i < videoFiles.length; i++) {
-                const fileName = `input${i}.mp4`;
-                await this.ffmpeg.writeFile(fileName, await fetchFile(videoFiles[i]));
-                fileListContent.push(`file '${fileName}'`);
+                const name = `input${i}.mp4`;
+                await this.writeFile(name, videoFiles[i]);
+                filenames.push(name);
             }
 
-            // Create concat file list
-            await this.ffmpeg.writeFile('filelist.txt', fileListContent.join('\n'));
-
-            // Concat videos
-            await this.ffmpeg.exec([
-                '-f', 'concat',
-                '-safe', '0',
-                '-i', 'filelist.txt',
-                '-c', 'copy',
-                outputName
-            ]);
-
-            // Read output
-            const data = await this.ffmpeg.readFile(outputName);
+            await this.concat(filenames, outputName);
+            const data = await this.readFile(outputName);
 
             // Cleanup
-            for (let i = 0; i < videoFiles.length; i++) {
-                await this.ffmpeg.deleteFile(`input${i}.mp4`);
-            }
-            await this.ffmpeg.deleteFile('filelist.txt');
-            await this.ffmpeg.deleteFile(outputName);
+            for (const name of filenames) await this.deleteFile(name);
+            await this.deleteFile(outputName);
 
             return new Blob([data.buffer], { type: 'video/mp4' });
         } catch (error) {

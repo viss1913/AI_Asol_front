@@ -14,43 +14,59 @@ export const EditorProvider = ({ children }) => {
         duration: 0
     });
 
-    // Add clip to timeline
-    const addClip = useCallback((clipData) => {
-        const newClip = {
-            id: generateId(),
-            ...clipData,
-            startTime: clips.reduce((acc, clip) => acc + clip.duration, 0), // Auto-position at end
-            duration: clipData.duration || 0,
-            trimStart: 0,
-            trimEnd: clipData.duration || 0,
-            hasAudio: clipData.type === 'video' // Track if video has audio
-        };
+    // Add multiple clips to timeline (batch)
+    const addClips = useCallback((clipsData) => {
+        if (!Array.isArray(clipsData)) clipsData = [clipsData];
+        if (clipsData.length === 0) return;
 
         setClips(prev => {
-            const newClips = [...prev, newClip];
+            const newClips = [...prev];
 
-            // If it's a video, also add its audio track
-            if (clipData.type === 'video') {
-                const audioClip = {
+            clipsData.forEach(clipData => {
+                // Calculate start time based on max end time of existing clips of the same type
+                // Note: we use newClips (which includes just-added items) to ensure sequential placement
+                const startTime = newClips
+                    .filter(c => c.type === clipData.type)
+                    .reduce((maxEnd, c) => Math.max(maxEnd, c.startTime + (c.duration || 0)), 0);
+
+                const newClip = {
                     id: generateId(),
-                    type: 'audio',
-                    url: clipData.url,
-                    name: `${clipData.name} (аудио)`,
+                    ...clipData,
+                    startTime,
                     duration: clipData.duration || 0,
-                    startTime: newClip.startTime,
                     trimStart: 0,
                     trimEnd: clipData.duration || 0,
-                    sourceVideoId: newClip.id, // Link to parent video
-                    volume: 1.0
+                    hasAudio: clipData.type === 'video'
                 };
-                newClips.push(audioClip);
-            }
+
+                newClips.push(newClip);
+
+                // If it's a video, also add its audio track
+                if (clipData.type === 'video') {
+                    const audioClip = {
+                        id: generateId(),
+                        type: 'audio',
+                        url: clipData.url,
+                        name: `${clipData.name} (аудио)`,
+                        duration: clipData.duration || 0,
+                        startTime: newClip.startTime,
+                        trimStart: 0,
+                        trimEnd: clipData.duration || 0,
+                        sourceVideoId: newClip.id,
+                        volume: 1.0
+                    };
+                    newClips.push(audioClip);
+                }
+            });
 
             return newClips;
         });
+    }, []);
 
-        return newClip.id;
-    }, [clips]);
+    // Legacy single add (wrapper)
+    const addClip = useCallback((clipData) => {
+        addClips([clipData]);
+    }, [addClips]);
 
     // Remove clip from timeline
     const removeClip = useCallback((clipId) => {
@@ -142,6 +158,7 @@ export const EditorProvider = ({ children }) => {
         selectedClipId,
         projectSettings,
         addClip,
+        addClips,
         removeClip,
         updateClip,
         splitClip,

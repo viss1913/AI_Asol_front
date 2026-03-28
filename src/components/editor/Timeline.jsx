@@ -3,6 +3,7 @@ import { Trash2, Scissors, Upload, Play, Pause, SkipBack, MousePointer2 } from '
 import { useEditor } from '../../context/EditorContext';
 import { formatTime } from '../../utils/editorUtils';
 import { generateWaveform } from '../../utils/audioUtils';
+import { getProxyUrl } from '../../utils/proxyUtils';
 
 // Audio Clip Component with Waveform
 const AudioClip = ({ clip, isSelected, onClick, onRemove }) => {
@@ -10,7 +11,7 @@ const AudioClip = ({ clip, isSelected, onClick, onRemove }) => {
 
     useEffect(() => {
         if (clip.url) {
-            generateWaveform(clip.url, 50).then(data => setWaveform(data));
+            generateWaveform(getProxyUrl(clip.url), 50).then(data => setWaveform(data));
         }
     }, [clip.url]);
 
@@ -73,6 +74,7 @@ const AudioClip = ({ clip, isSelected, onClick, onRemove }) => {
 
 const TimelineClip = React.memo(({ clip, isSelected, onClick, onRemove, onTrimUpdate }) => {
     const [thumbnails, setThumbnails] = useState([]);
+    const [hasError, setHasError] = useState(false);
     const [localTrimStart, setLocalTrimStart] = useState(clip.trimStart || 0);
     const [localTrimEnd, setLocalTrimEnd] = useState(clip.trimEnd || clip.duration);
     const [isDraggingStart, setIsDraggingStart] = useState(false);
@@ -83,41 +85,56 @@ const TimelineClip = React.memo(({ clip, isSelected, onClick, onRemove, onTrimUp
         if (!clip.url || clip.type !== 'video') return;
 
         const generateThumbnails = async () => {
+            setHasError(false);
             const video = document.createElement('video');
-            video.src = clip.url;
+            video.src = getProxyUrl(clip.url);
             video.crossOrigin = 'anonymous';
 
-            await new Promise((resolve) => {
-                video.onloadedmetadata = resolve;
-            });
-
-            const canvas = document.createElement('canvas');
-            // Increase resolution for better quality (2x the display size)
-            canvas.width = 240;  // Was 120
-            canvas.height = 135; // Was 68
-            const ctx = canvas.getContext('2d', {
-                alpha: false,
-                desynchronized: true,
-                willReadFrequently: false
-            });
-
-            const thumbs = [];
-            const interval = clip.duration / 8; // 8 thumbnails
-
-            for (let i = 0; i < 8; i++) {
-                video.currentTime = i * interval;
-                await new Promise((resolve) => {
-                    video.onseeked = resolve;
+            try {
+                await new Promise((resolve, reject) => {
+                    video.onloadedmetadata = () => {
+                        console.log(`[Timeline] Metadata loaded for ${clip.url}`);
+                        resolve();
+                    };
+                    video.onerror = (e) => {
+                        console.error(`[Timeline] Error loading video for thumbnails: ${clip.url}`, e);
+                        reject(new Error("Failed to load video metadata"));
+                    };
+                    // Timeout after 10s
+                    setTimeout(() => reject(new Error("Metadata timeout")), 10000);
                 });
 
-                // Use high-quality rendering
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                thumbs.push(canvas.toDataURL('image/jpeg', 0.9)); // Increase JPEG quality to 0.9
-            }
+                const canvas = document.createElement('canvas');
+                canvas.width = 160;
+                canvas.height = 90;
+                const ctx = canvas.getContext('2d', { alpha: false });
 
-            setThumbnails(thumbs);
+                const thumbs = [];
+                const interval = clip.duration / 8;
+
+                for (let i = 0; i < 8; i++) {
+                    video.currentTime = i * interval;
+                    await new Promise((resolve, reject) => {
+                        const onSeeked = () => {
+                            video.removeEventListener('seeked', onSeeked);
+                            resolve();
+                        };
+                        video.addEventListener('seeked', onSeeked);
+                        setTimeout(() => {
+                            video.removeEventListener('seeked', onSeeked);
+                            reject(new Error("Seeked timeout"));
+                        }, 2000);
+                    });
+
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    thumbs.push(canvas.toDataURL('image/jpeg', 0.5));
+                }
+
+                setThumbnails(thumbs);
+            } catch (err) {
+                console.error("[Timeline] Thumbnail generation failed:", err);
+                setHasError(true);
+            }
         };
 
         generateThumbnails();
@@ -202,7 +219,9 @@ const TimelineClip = React.memo(({ clip, isSelected, onClick, onRemove, onTrimUp
                     ))
                 ) : (
                     <div className="flex-1 bg-slate-200 flex items-center justify-center">
-                        <div className="text-slate-400 text-xs">Загрузка...</div>
+                        <div className="text-slate-400 text-xs">
+                            {hasError ? 'Ошибка превью' : 'Загрузка...'}
+                        </div>
                     </div>
                 )}
             </div>
@@ -348,14 +367,43 @@ const Timeline = ({ onOpenAddMedia }) => {
 
         try {
             const item = JSON.parse(mediaItemData);
-            // Check if file exists in history context (simulated check since we use direct object)
-            // In a real app we might fetch the blob here if needed, but we have the URL
+            console.log('[Timeline] Dropped item:', item);
+
+            let duration = item.duration || 0;
+            const mediaUrl = item.url || item.video_url || item.result?.[0];
+
+            if (item.type === 'video' && !duration) {
+                try {
+                    console.log('[Timeline] Fetching missing duration for dropped item...');
+                    const proxiedUrl = getProxyUrl(mediaUrl);
+                    const response = await fetch(proxiedUrl, { mode: 'cors' });
+                    const blob = await response.blob();
+                    const { getVideoMetadata } = await import('../../utils/editorUtils');
+                    const metadata = await getVideoMetadata(blob);
+                    duration = metadata.duration;
+                } catch (err) {
+                    console.error('[Timeline] Failed to get duration for drop:', err);
+                    duration = 5; // Fallback
+                }
+            } else if (!duration) {
+                duration = 5; // Default for audio/images
+            }
+
+            // Extract prompt safely
+            let promptText = 'Без названия';
+            if (item.prompt) {
+                promptText = typeof item.prompt === 'object' ? (item.prompt.text || item.prompt.prompt || JSON.stringify(item.prompt)) : item.prompt;
+            }
+
             addClip({
                 type: item.type,
-                url: item.url,
-                name: item.prompt || item.name || 'Untitled',
-                duration: item.duration || 5 // Default 5s if duration missing
+                url: mediaUrl,
+                name: promptText,
+                duration: duration,
+                source: 'history',
+                historyId: item.id
             });
+            console.log('[Timeline] Successfully added dropped clip');
         } catch (err) {
             console.error('Failed to parse dropped item', err);
         }

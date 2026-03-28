@@ -1,7 +1,7 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, Video, Image as ImageIcon, Mic, Music, PenTool, Sparkles, ArrowRight } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { MessageSquare, Video, Image as ImageIcon, Mic, Music, PenTool, Sparkles, ArrowRight, Grid, ReceiptText } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 
 const Dashboard = () => {
@@ -24,6 +24,17 @@ const Dashboard = () => {
     };
 
     const features = [
+        {
+            id: 'gallery',
+            title: 'Моя галерея',
+            description: 'Ваша личная коллекция всех созданных работ.',
+            icon: Grid,
+            color: 'bg-slate-800',
+            bg: 'bg-slate-50',
+            text: 'text-slate-900',
+            link: '/gallery',
+            active: true
+        },
         {
             id: 'chat',
             title: 'AI Чат',
@@ -66,6 +77,17 @@ const Dashboard = () => {
             bg: 'bg-emerald-50',
             text: 'text-emerald-600',
             link: '/audio',
+            active: true
+        },
+        {
+            id: 'billing',
+            title: 'История',
+            description: 'Ваша история списаний и пополнений баланса.',
+            icon: ReceiptText,
+            color: 'bg-slate-700',
+            bg: 'bg-slate-50',
+            text: 'text-slate-600',
+            link: '/transactions',
             active: true
         },
         {
