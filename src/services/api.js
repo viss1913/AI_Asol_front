@@ -254,20 +254,52 @@ export const presentationService = {
         const response = await api.post(`/presentations/${id}/chat`, { message });
         return response.data;
     },
-    generate: async (id) => {
-        const response = await api.post(`/presentations/${id}/generate`);
+    listStyles: async () => {
+        const response = await api.get('/presentations/styles/list');
+        return response.data;
+    },
+    listTemplates: async () => {
+        const response = await api.get('/presentations/templates/list');
+        return response.data;
+    },
+    approveText: async (id) => {
+        const response = await api.post(`/presentations/${id}/approve-text`);
+        return response.data;
+    },
+    addSlide: async (id, data = {}) => {
+        const response = await api.post(`/presentations/${id}/slides`, data);
+        return response.data;
+    },
+    deleteSlide: async (id, slideId) => {
+        const response = await api.delete(`/presentations/${id}/slides/${slideId}`);
+        return response.data;
+    },
+    restoreSlideImage: async (id, slideId, historyIndex = 0) => {
+        const response = await api.post(`/presentations/${id}/slides/${slideId}/restore-image`, { historyIndex });
+        return response.data;
+    },
+    generate: async (id, force = false) => {
+        const response = await api.post(`/presentations/${id}/generate${force ? '?force=true' : ''}`);
+        return response.data;
+    },
+    generateSlide: async (id, slideId) => {
+        const response = await api.post(`/presentations/${id}/slides/${slideId}/generate`);
         return response.data;
     },
     getStatus: async (id) => {
         const response = await api.get(`/presentations/${id}/status`);
         return response.data;
     },
-    estimateCost: async (id) => {
-        const response = await api.get(`/presentations/${id}/estimate`);
+    estimateCost: async (id, force = false) => {
+        const response = await api.get(`/presentations/${id}/estimate${force ? '?force=true' : ''}`);
         return response.data;
     },
     exportPdf: async (id) => {
         const response = await api.post(`/presentations/${id}/export-pdf`);
+        return response.data;
+    },
+    exportPptx: async (id) => {
+        const response = await api.post(`/presentations/${id}/export-pptx`);
         return response.data;
     },
 };

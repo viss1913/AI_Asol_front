@@ -4,15 +4,53 @@ import { useUser } from '../context/UserContext';
 import { getProxyUrl } from '../utils/proxyUtils';
 import {
     Plus, Send, Loader2, Trash2, Presentation, ChevronLeft, ChevronRight,
-    Download, Sparkles, Bot, User, ArrowLeft, FileText, Paperclip, ImagePlus, X
+    Download, Sparkles, Bot, User, ArrowLeft, FileText, Paperclip, ImagePlus, X,
+    Copy, CheckCircle2
 } from 'lucide-react';
 import avatarBase from '../assets/avatar.png';
 
-const STYLES = [
-    { id: 'corporate', label: 'Корпоративный' },
-    { id: 'creative', label: 'Креативный' },
+const URL_REGEX = /https?:\/\/[^\s<>"')\]]+/gi;
+
+const extractUrls = (text) => {
+    if (!text) return [];
+    const matches = text.match(URL_REGEX) || [];
+    return [...new Set(matches.map((u) => u.replace(/[.,;:!?)]+$/, '')))];
+};
+
+const stripServiceContent = (content) => {
+    if (!content) return '';
+    return content
+        .replace(/\n\n\[Прикреплённые[\s\S]*$/, '')
+        .replace(/\n\n\[Контент со страницы[\s\S]*$/, '')
+        .replace(/\n\n\[Контент из документа[\s\S]*$/, '')
+        .trim();
+};
+
+const STATUS_LABELS = {
+    draft: 'Черновик',
+    text_approved: 'Текст утверждён',
+    ready: 'Готово',
+    generating: 'Генерация',
+    completed: 'Завершено',
+    failed: 'Ошибка',
+};
+
+const CAN_GENERATE_STATUSES = ['text_approved', 'ready', 'completed'];
+
+const SLIDE_TYPES = [
+    { id: 'title', label: 'Титульный' },
+    { id: 'content', label: 'Контент' },
+    { id: 'section', label: 'Секция' },
+    { id: 'closing', label: 'Финал' },
+];
+
+const DEFAULT_STYLES = [
+    { id: 'mckinsey', label: 'McKinsey' },
+    { id: 'bcg', label: 'BCG / Big 3' },
+    { id: 'apple', label: 'Apple Keynote' },
+    { id: 'startup', label: 'Стартап / Pitch' },
+    { id: 'dark_tech', label: 'Dark Tech' },
     { id: 'minimal', label: 'Минимализм' },
-    { id: 'dark', label: 'Тёмный' },
 ];
 
 const Presentations = () => {
@@ -34,7 +72,15 @@ const Presentations = () => {
     const chatFileInputRef = useRef(null);
     const slideFileInputRef = useRef(null);
     const [chatFiles, setChatFiles] = useState([]);
+    const chatPreviewUrlsRef = useRef([]);
     const [uploadingRef, setUploadingRef] = useState(false);
+    const [stylePresets, setStylePresets] = useState(DEFAULT_STYLES);
+    const [regeneratingSlide, setRegeneratingSlide] = useState(false);
+    const [mobileTab, setMobileTab] = useState('chat');
+    const [templates, setTemplates] = useState([]);
+    const [selectedTemplate, setSelectedTemplate] = useState('');
+    const [exportingPptx, setExportingPptx] = useState(false);
+    const slidePollRef = useRef(null);
 
     const getSlideRefs = (slide) => {
         if (!slide?.referenceImageUrls) return [];
@@ -49,14 +95,55 @@ const Presentations = () => {
 
     useEffect(() => {
         loadList();
-        return () => { if (pollRef.current) clearInterval(pollRef.current); };
+        presentationService.listStyles().then(setStylePresets).catch(() => {});
+        presentationService.listTemplates().then(setTemplates).catch(() => {});
+        return () => {
+            if (pollRef.current) clearInterval(pollRef.current);
+            if (slidePollRef.current) clearInterval(slidePollRef.current);
+            chatPreviewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+        };
     }, []);
+
+    const addChatFiles = (files) => {
+        const picked = Array.from(files || []);
+        if (!picked.length) return;
+        const items = picked.map((file) => {
+            if (file.type.startsWith('image/')) {
+                const preview = URL.createObjectURL(file);
+                chatPreviewUrlsRef.current.push(preview);
+                return { file, preview, kind: 'image' };
+            }
+            return { file, kind: 'doc', name: file.name };
+        });
+        setChatFiles((prev) => [...prev, ...items].slice(0, 5));
+    };
+
+    const removeChatFile = (idx) => {
+        setChatFiles((prev) => {
+            const removed = prev[idx];
+            if (removed?.preview) {
+                URL.revokeObjectURL(removed.preview);
+                chatPreviewUrlsRef.current = chatPreviewUrlsRef.current.filter((u) => u !== removed.preview);
+            }
+            return prev.filter((_, i) => i !== idx);
+        });
+    };
+
+    const clearChatFiles = () => {
+        chatFiles.forEach((item) => {
+            if (item.preview) URL.revokeObjectURL(item.preview);
+        });
+        chatPreviewUrlsRef.current = [];
+        setChatFiles([]);
+    };
 
     useEffect(() => {
         if (current?.id) {
-            presentationService.estimateCost(current.id).then(setEstimate).catch(() => {});
+            const hasDone = slides.some((s) => s.status === 'done');
+            const force = hasDone && slides.some((s) => s.status === 'pending' || s.status === 'failed');
+            presentationService.estimateCost(current.id, false).then(setEstimate).catch(() => {});
         }
-    }, [current?.id, slides.length]);
+    }, [current?.id, slides.length, slides.map((s) => s.status).join(',')]);
 
     const loadList = async () => {
         setLoadingList(true);
@@ -74,10 +161,13 @@ const Presentations = () => {
         try {
             const data = await presentationService.getById(id);
             setCurrent(data);
-            setMessages(data.messages || []);
+            setMessages((data.messages || []).map((m) => ({
+                ...m,
+                sourcePages: m.sourcePages || undefined,
+            })));
             setSlides(data.slides || []);
             setActiveSlideIdx(0);
-            setReadyToGenerate(data.status === 'ready');
+            setReadyToGenerate(data.status === 'ready' || data.status === 'text_approved');
             if (data.status === 'generating') startPolling(id);
         } catch (e) {
             alert('Не удалось загрузить презентацию');
@@ -86,7 +176,9 @@ const Presentations = () => {
 
     const handleNew = async () => {
         try {
-            const data = await presentationService.create();
+            const data = await presentationService.create(
+                selectedTemplate ? { templateId: selectedTemplate } : {}
+            );
             await loadList();
             openPresentation(data.id);
         } catch (e) {
@@ -114,21 +206,28 @@ const Presentations = () => {
         e.preventDefault();
         if ((!input.trim() && !chatFiles.length) || loading || !current) return;
 
+        const msg = input;
+        const detectedUrls = extractUrls(msg);
         const userMsg = {
             role: 'user',
-            content: input || (chatFiles.length ? '📎 Прикреплены изображения' : ''),
-            imageUrls: chatFiles.map((f) => f.name),
+            content: input || (chatFiles.length ? 'Референс для слайдов' : ''),
+            imagePreviews: chatFiles.map((f) => f.preview),
+            linkUrls: detectedUrls,
         };
         setMessages((prev) => [...prev, userMsg]);
-        const msg = input;
-        const filesToSend = [...chatFiles];
+        const filesToSend = chatFiles.map((f) => f.file);
         setInput('');
-        setChatFiles([]);
+        clearChatFiles();
         setLoading(true);
 
         try {
             const data = await presentationService.sendChat(current.id, msg, filesToSend);
-            setMessages((prev) => [...prev, { role: 'assistant', content: data.message, cost: data.cost }]);
+            setMessages((prev) => [...prev, {
+                role: 'assistant',
+                content: data.message,
+                cost: data.cost,
+                sourcePages: data.sourcePages,
+            }]);
             if (data.presentation) {
                 setCurrent(data.presentation);
                 setSlides(data.presentation.slides || []);
@@ -163,15 +262,174 @@ const Presentations = () => {
         }, 3000);
     };
 
+    const handleStyleChange = async (styleId) => {
+        if (!current) return;
+        setCurrent({ ...current, style: styleId });
+        try {
+            const data = await presentationService.update(current.id, { style: styleId });
+            setCurrent(data);
+        } catch (e) {
+            alert('Не удалось сменить стиль');
+        }
+    };
+
+    const pollSingleSlide = (id, slideId) => {
+        if (slidePollRef.current) clearInterval(slidePollRef.current);
+        slidePollRef.current = setInterval(async () => {
+            try {
+                const status = await presentationService.getStatus(id);
+                setSlides(status.slides || []);
+                const slide = status.slides?.find((s) => s.id === slideId);
+                if (slide && slide.status !== 'generating') {
+                    clearInterval(slidePollRef.current);
+                    setRegeneratingSlide(false);
+                    refreshProfile();
+                }
+            } catch { /* ignore */ }
+        }, 2000);
+    };
+
+    const runSlideGeneration = async (label) => {
+        if (!current || !activeSlide?.id || regeneratingSlide) return;
+        const cost = estimate?.costPerSlide || '?';
+        if (!confirm(`${label} за ~${cost} ₽?`)) return;
+        setRegeneratingSlide(true);
+        try {
+            await presentationService.generateSlide(current.id, activeSlide.id);
+            pollSingleSlide(current.id, activeSlide.id);
+        } catch (err) {
+            alert(err.response?.data?.error || 'Ошибка генерации слайда');
+            setRegeneratingSlide(false);
+        }
+    };
+
+    const handlePreviewSlide = () => runSlideGeneration('Пробный слайд');
+    const handleRegenerateSlide = () => runSlideGeneration('Перегенерировать слайд');
+
+    const handleApproveText = async () => {
+        if (!current) return;
+        try {
+            const data = await presentationService.approveText(current.id);
+            setCurrent(data);
+            setReadyToGenerate(true);
+        } catch (err) {
+            alert(err.response?.data?.error || 'Ошибка утверждения');
+        }
+    };
+
+    const handlePresentationField = async (field, value) => {
+        if (!current) return;
+        setCurrent({ ...current, [field]: value });
+        try {
+            const data = await presentationService.update(current.id, { [field]: value });
+            setCurrent(data);
+            if (field === 'resolution') {
+                presentationService.estimateCost(current.id).then(setEstimate).catch(() => {});
+            }
+        } catch {
+            alert('Не удалось сохранить');
+        }
+    };
+
+    const handleBrandLogoUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file || !current) return;
+        try {
+            const res = await contentService.uploadFile(file);
+            if (res?.url) await handlePresentationField('brandLogoUrl', res.url);
+        } catch {
+            alert('Не удалось загрузить лого');
+        }
+        e.target.value = '';
+    };
+
     const handleGenerate = async () => {
         if (!current || generating) return;
-        if (!confirm(`Сгенерировать ${slides.length} слайдов за ~${estimate?.totalCost || '?'} ₽?`)) return;
+        if (!CAN_GENERATE_STATUSES.includes(current.status)) {
+            alert('Сначала утверди текст презентации');
+            return;
+        }
+        let force = false;
+        let count = estimate?.pendingSlides ?? 0;
+        let totalCost = estimate?.totalCost;
+        if (count === 0 && slides.length > 0) {
+            if (!confirm('Все слайды уже готовы. Перегенерировать всю колоду заново?')) return;
+            force = true;
+            const est = await presentationService.estimateCost(current.id, true);
+            count = est.pendingSlides;
+            totalCost = est.totalCost;
+        }
+        if (!count) {
+            alert('Нет слайдов для генерации');
+            return;
+        }
+        if (!confirm(`Сгенерировать ${count} слайдов за ~${totalCost || '?'} ₽?`)) return;
         try {
-            await presentationService.generate(current.id);
+            await presentationService.generate(current.id, force);
             setGenerating(true);
             startPolling(current.id);
         } catch (err) {
             alert(err.response?.data?.error || 'Ошибка генерации');
+        }
+    };
+
+    const handleAddSlide = async () => {
+        if (!current) return;
+        try {
+            const data = await presentationService.addSlide(current.id);
+            setSlides(data.presentation?.slides || []);
+            setActiveSlideIdx((data.presentation?.slides?.length || 1) - 1);
+        } catch {
+            alert('Не удалось добавить слайд');
+        }
+    };
+
+    const handleDeleteSlide = async () => {
+        if (!current || !activeSlide?.id) return;
+        if (!confirm('Удалить слайд?')) return;
+        try {
+            const data = await presentationService.deleteSlide(current.id, activeSlide.id);
+            setSlides(data.slides || []);
+            setActiveSlideIdx(0);
+        } catch {
+            alert('Не удалось удалить');
+        }
+    };
+
+    const handleDuplicateSlide = async () => {
+        if (!activeSlide) return;
+        const copy = {
+            ...activeSlide,
+            id: undefined,
+            order: slides.length + 1,
+            imageUrl: null,
+            status: 'pending',
+            taskId: null,
+        };
+        const newSlides = [...slides, copy].map((s, i) => ({ ...s, order: i + 1 }));
+        await saveSlides(newSlides);
+        setActiveSlideIdx(newSlides.length - 1);
+    };
+
+    const moveSlide = async (direction) => {
+        const idx = activeSlideIdx;
+        const target = idx + direction;
+        if (target < 0 || target >= slides.length) return;
+        const reordered = [...slides];
+        [reordered[idx], reordered[target]] = [reordered[target], reordered[idx]];
+        const normalized = reordered.map((s, i) => ({ ...s, order: i + 1 }));
+        setSlides(normalized);
+        setActiveSlideIdx(target);
+        await saveSlides(normalized);
+    };
+
+    const handleRestoreImage = async (historyIndex = 0) => {
+        if (!current || !activeSlide?.id) return;
+        try {
+            const data = await presentationService.restoreSlideImage(current.id, activeSlide.id, historyIndex);
+            setSlides(data.slides || []);
+        } catch (err) {
+            alert(err.response?.data?.error || 'Не удалось откатить');
         }
     };
 
@@ -187,6 +445,21 @@ const Presentations = () => {
             setExporting(false);
         }
     };
+
+    const handleExportPptx = async () => {
+        if (!current || exportingPptx) return;
+        setExportingPptx(true);
+        try {
+            const data = await presentationService.exportPptx(current.id);
+            window.open(getProxyUrl(data.pptxUrl), '_blank');
+        } catch (err) {
+            alert(err.response?.data?.error || 'Ошибка экспорта PPTX');
+        } finally {
+            setExportingPptx(false);
+        }
+    };
+
+    const canGenerate = current && CAN_GENERATE_STATUSES.includes(current.status);
 
     const updateSlideField = (idx, field, value) => {
         setSlides((prev) => prev.map((s, i) => (i === idx ? { ...s, [field]: value } : s)));
@@ -247,13 +520,27 @@ const Presentations = () => {
                             <h1 className="text-3xl font-black text-slate-900">Презентации</h1>
                             <p className="text-slate-500 mt-1">Создавай слайды с ИИ и экспортируй в PDF</p>
                         </div>
-                        <button
-                            onClick={handleNew}
-                            className="flex items-center gap-2 px-5 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
-                        >
-                            <Plus size={18} />
-                            Новая
-                        </button>
+                        <div className="flex items-center gap-2">
+                            {templates.length > 0 && (
+                                <select
+                                    value={selectedTemplate}
+                                    onChange={(e) => setSelectedTemplate(e.target.value)}
+                                    className="text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white"
+                                >
+                                    <option value="">Без шаблона</option>
+                                    {templates.map((t) => (
+                                        <option key={t.id} value={t.id}>{t.label}</option>
+                                    ))}
+                                </select>
+                            )}
+                            <button
+                                onClick={handleNew}
+                                className="flex items-center gap-2 px-5 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
+                            >
+                                <Plus size={18} />
+                                Новая
+                            </button>
+                        </div>
                     </div>
 
                     {loadingList ? (
@@ -302,9 +589,26 @@ const Presentations = () => {
 
     // Editor split-view
     return (
-        <div className="flex h-screen bg-slate-50 overflow-hidden pt-16">
+        <div className="flex flex-col h-screen bg-slate-50 overflow-hidden pt-16">
+            <div className="lg:hidden flex border-b border-slate-200 bg-white">
+                <button
+                    type="button"
+                    onClick={() => setMobileTab('chat')}
+                    className={`flex-1 py-3 text-sm font-bold ${mobileTab === 'chat' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-400'}`}
+                >
+                    Чат
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setMobileTab('slides')}
+                    className={`flex-1 py-3 text-sm font-bold ${mobileTab === 'slides' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-400'}`}
+                >
+                    Слайды
+                </button>
+            </div>
+            <div className="flex flex-1 overflow-hidden min-h-0">
             {/* Left: Chat */}
-            <div className="w-full lg:w-[42%] flex flex-col border-r border-slate-200 bg-white">
+            <div className={`${mobileTab === 'chat' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[42%] flex-col border-r border-slate-200 bg-white`}>
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-3">
                     <button onClick={() => setCurrent(null)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500">
                         <ArrowLeft size={18} />
@@ -321,7 +625,7 @@ const Presentations = () => {
                         <div className="text-center py-12 text-slate-400">
                             <Bot size={40} className="mx-auto mb-3 opacity-30" />
                             <p className="text-sm font-medium">Расскажи, какую презентацию делаем?</p>
-                            <p className="text-xs mt-1">Можешь прикрепить картинки — привяжу к слайдам. GPT Image 2 сделает слайд с текстом</p>
+                            <p className="text-xs mt-1">Вставь ссылку на сайт — подтяну текст. Или прикрепи картинку-референс скрепкой</p>
                         </div>
                     )}
                     {messages.map((m, i) => (
@@ -330,9 +634,58 @@ const Presentations = () => {
                                 {m.role === 'user' ? <User size={14} /> : <Bot size={14} className="text-indigo-500" />}
                             </div>
                             <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm ${m.role === 'user' ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700'}`}>
-                                {m.content}
-                                {m.imageUrls?.length > 0 && (
-                                    <p className="text-[10px] mt-1 opacity-70">📎 {m.imageUrls.length} изображений</p>
+                                {stripServiceContent(m.content) && (
+                                    <p className="whitespace-pre-wrap">{stripServiceContent(m.content)}</p>
+                                )}
+                                {m.linkUrls?.length > 0 && (
+                                    <div className={`flex flex-wrap gap-1.5 ${stripServiceContent(m.content) ? 'mt-2 pt-2 border-t border-white/10' : ''}`}>
+                                        {m.linkUrls.map((url, li) => (
+                                            <span key={li} className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white/10 text-indigo-200">
+                                                🔗 {(() => { try { return new URL(url).hostname; } catch { return 'ссылка'; } })()}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                                {(m.imagePreviews?.length > 0 || m.imageUrls?.length > 0) && (
+                                    <div className={`flex flex-wrap gap-1.5 mt-2 ${(stripServiceContent(m.content) || m.linkUrls?.length) ? 'pt-2 border-t border-white/10' : ''}`}>
+                                        {(m.imagePreviews || m.imageUrls).map((src, pi) => (
+                                            <img
+                                                key={pi}
+                                                src={m.imagePreviews ? src : getProxyUrl(src)}
+                                                alt=""
+                                                className="w-14 h-14 rounded-lg object-cover border border-white/20"
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                                {m.sourcePages?.length > 0 && (
+                                    <div className="mt-2 pt-2 border-t border-slate-200 space-y-2">
+                                        {m.sourcePages.map((page, pi) => (
+                                            <div key={pi} className="flex gap-2 items-start p-2 bg-white rounded-lg border border-slate-100">
+                                                {page.ogImageUrl && (
+                                                    <img
+                                                        src={getProxyUrl(page.ogImageUrl)}
+                                                        alt=""
+                                                        className="w-10 h-10 rounded object-cover shrink-0"
+                                                    />
+                                                )}
+                                                <div className="min-w-0">
+                                                    {page.error ? (
+                                                        <p className="text-xs text-red-500">Не удалось открыть: {page.url}</p>
+                                                    ) : (
+                                                        <>
+                                                            <p className="text-xs font-bold text-slate-700 truncate">
+                                                                {page.title || page.url}
+                                                            </p>
+                                                            <p className="text-[10px] text-slate-400">
+                                                                {page.charCount?.toLocaleString('ru-RU')} символов · {(() => { try { return new URL(page.url).hostname; } catch { return page.url; } })()}
+                                                            </p>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -342,107 +695,200 @@ const Presentations = () => {
                             <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
                                 <Loader2 size={14} className="animate-spin text-indigo-500" />
                             </div>
-                            <div className="px-4 py-3 bg-slate-50 rounded-2xl text-sm text-slate-400">Думаю...</div>
+                            <div className="px-4 py-3 bg-slate-50 rounded-2xl text-sm text-slate-400">
+                                {messages[messages.length - 1]?.linkUrls?.length ? 'Подтягиваю страницу...' : 'Думаю...'}
+                            </div>
                         </div>
                     )}
                     <div ref={messagesEndRef} />
                 </div>
 
-                <form onSubmit={handleSend} className="p-4 border-t border-slate-100">
+                <form
+                    onSubmit={handleSend}
+                    className="p-4 border-t border-slate-100"
+                    onPaste={(e) => {
+                        const images = Array.from(e.clipboardData?.items || [])
+                            .filter((item) => item.type.startsWith('image/'))
+                            .map((item) => item.getAsFile())
+                            .filter(Boolean);
+                        if (images.length) {
+                            e.preventDefault();
+                            addChatFiles(images);
+                        }
+                    }}
+                >
                     {chatFiles.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-2">
-                            {chatFiles.map((f, i) => (
-                                <span key={i} className="flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded-lg">
-                                    <ImagePlus size={12} />
-                                    {f.name.slice(0, 20)}
-                                    <button type="button" onClick={() => setChatFiles((prev) => prev.filter((_, j) => j !== i))}>
+                        <div className="flex flex-wrap gap-2 mb-3 p-2 bg-slate-50 rounded-xl border border-slate-100">
+                            {chatFiles.map((item, i) => (
+                                <div key={i} className="relative rounded-lg overflow-hidden border-2 border-indigo-200 shadow-sm">
+                                    {item.kind === 'image' ? (
+                                        <div className="w-16 h-16">
+                                            <img src={item.preview} alt="" className="w-full h-full object-cover" />
+                                        </div>
+                                    ) : (
+                                        <div className="px-2 py-1 text-[10px] font-bold text-indigo-700 max-w-[100px] truncate">
+                                            <FileText size={12} className="inline mr-1" />
+                                            {item.name}
+                                        </div>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => removeChatFile(i)}
+                                        className="absolute top-0 right-0 p-0.5 bg-black/60 text-white rounded-bl"
+                                    >
                                         <X size={12} />
                                     </button>
-                                </span>
+                                </div>
                             ))}
+                            <p className="w-full text-[10px] text-slate-400 font-medium">
+                                {chatFiles.length}/5 · напиши «эту картинку на слайд 2»
+                            </p>
                         </div>
                     )}
-                    <div className="flex gap-2">
-                        <input
-                            type="file"
-                            ref={chatFileInputRef}
-                            className="hidden"
-                            accept="image/jpeg,image/png,image/webp"
-                            multiple
-                            onChange={(e) => {
-                                const picked = Array.from(e.target.files || []);
-                                setChatFiles((prev) => [...prev, ...picked].slice(0, 5));
-                                e.target.value = '';
-                            }}
-                        />
-                        <button
-                            type="button"
-                            onClick={() => chatFileInputRef.current?.click()}
-                            className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-xl transition-all"
-                            title="Прикрепить картинки"
-                        >
-                            <Paperclip size={18} />
-                        </button>
-                        <input
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            placeholder="Опиши презентацию или «эту картинку на слайд 2»..."
-                            className="flex-1 px-4 py-3 bg-slate-50 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            disabled={loading}
-                        />
+                    <div className="flex gap-2 items-center">
+                        <div className="relative flex-1">
+                            <input
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                placeholder="Текст, ссылка на сайт или «эту картинку на слайд 2»..."
+                                className="w-full pl-4 pr-11 py-3 bg-slate-50 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                                disabled={loading}
+                            />
+                            <input
+                                type="file"
+                                ref={chatFileInputRef}
+                                className="hidden"
+                                accept="image/jpeg,image/png,image/webp,image/gif,.pdf,.doc,.docx"
+                                multiple
+                                onChange={(e) => {
+                                    addChatFiles(e.target.files);
+                                    e.target.value = '';
+                                }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => chatFileInputRef.current?.click()}
+                                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-all ${
+                                    chatFiles.length
+                                        ? 'text-indigo-600 bg-indigo-50'
+                                        : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-100'
+                                }`}
+                                title="Прикрепить референс (jpg, png, webp)"
+                            >
+                                <Paperclip size={18} />
+                            </button>
+                        </div>
                         <button
                             type="submit"
                             disabled={loading || (!input.trim() && !chatFiles.length)}
-                            className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-40 transition-all"
+                            className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-40 transition-all shrink-0"
                         >
-                            <Send size={18} />
+                            {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
                         </button>
                     </div>
+                    <p className="text-[10px] text-slate-400 mt-2 text-center">
+                        Ссылка · картинка/PDF/DOC скрепкой · Ctrl+V для фото
+                    </p>
                 </form>
             </div>
 
             {/* Right: Structure + Preview */}
-            <div className="hidden lg:flex flex-1 flex-col overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between">
-                    <div>
-                        <input
-                            value={current.title || ''}
-                            onChange={(e) => setCurrent({ ...current, title: e.target.value })}
-                            onBlur={() => presentationService.update(current.id, { title: current.title })}
-                            className="text-lg font-black text-slate-900 bg-transparent border-none focus:outline-none"
-                        />
-                        <p className="text-xs text-slate-400">
-                            {slides.length} слайдов · GPT Image 2 с текстом · {current.status}
-                        </p>
+            <div className={`${mobileTab === 'slides' ? 'flex' : 'hidden'} lg:flex flex-1 flex-col overflow-hidden`}>
+                <div className="px-4 lg:px-6 py-4 border-b border-slate-200 bg-white space-y-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                            <input
+                                value={current.title || ''}
+                                onChange={(e) => setCurrent({ ...current, title: e.target.value })}
+                                onBlur={() => presentationService.update(current.id, { title: current.title })}
+                                className="text-lg font-black text-slate-900 bg-transparent border-none focus:outline-none w-full"
+                            />
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                                <span className="text-xs text-slate-400">
+                                    {slides.length} слайдов · {STATUS_LABELS[current.status] || current.status}
+                                </span>
+                                <select
+                                    value={current.style || 'mckinsey'}
+                                    onChange={(e) => handleStyleChange(e.target.value)}
+                                    className="text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1"
+                                >
+                                    {stylePresets.map((s) => (
+                                        <option key={s.id} value={s.id}>{s.label}</option>
+                                    ))}
+                                </select>
+                                <select
+                                    value={current.mode || 'full_image'}
+                                    onChange={(e) => handlePresentationField('mode', e.target.value)}
+                                    className="text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1"
+                                >
+                                    <option value="full_image">Текст на картинке</option>
+                                    <option value="hybrid">Hybrid (текст в PDF)</option>
+                                </select>
+                                <select
+                                    value={current.resolution || '2K'}
+                                    onChange={(e) => handlePresentationField('resolution', e.target.value)}
+                                    className="text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1"
+                                >
+                                    <option value="1K">1K</option>
+                                    <option value="2K">2K</option>
+                                    <option value="4K">4K</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {estimate && (
+                                <span className="text-xs text-slate-500 font-medium">
+                                    ~{estimate.totalCost} ₽ ({estimate.pendingSlides} слайдов)
+                                </span>
+                            )}
+                            <button
+                                onClick={handleApproveText}
+                                disabled={!slides.length || current.status === 'text_approved' || current.status === 'ready'}
+                                className="flex items-center gap-1 px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-bold hover:bg-emerald-100 disabled:opacity-40"
+                            >
+                                <CheckCircle2 size={14} />
+                                Утвердить текст
+                            </button>
+                            <button
+                                onClick={handleGenerate}
+                                disabled={generating || !slides.length || !canGenerate}
+                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 disabled:opacity-40"
+                            >
+                                {generating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                                {generating ? 'Генерация...' : 'Сгенерировать'}
+                            </button>
+                            <button onClick={handleExportPdf} disabled={exporting || !slides.some((s) => s.imageUrl)} className="flex items-center gap-1 px-3 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold disabled:opacity-40">
+                                {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                                PDF
+                            </button>
+                            <button onClick={handleExportPptx} disabled={exportingPptx || !slides.length} className="flex items-center gap-1 px-3 py-2 bg-slate-700 text-white rounded-xl text-xs font-bold disabled:opacity-40">
+                                {exportingPptx ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                                PPTX
+                            </button>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        {estimate && (
-                            <span className="text-xs text-slate-500 font-medium mr-2">
-                                ~{estimate.totalCost} ₽
-                            </span>
+                    <div className="flex flex-wrap items-center gap-3 p-2 bg-slate-50 rounded-xl border border-slate-100">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Бренд</span>
+                        {current.brandLogoUrl && (
+                            <img src={getProxyUrl(current.brandLogoUrl)} alt="" className="w-8 h-8 rounded object-cover" />
                         )}
-                        <button
-                            onClick={handleGenerate}
-                            disabled={generating || !slides.length}
-                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 disabled:opacity-40 transition-all"
-                        >
-                            {generating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                            {generating ? 'Генерация...' : 'Сгенерировать'}
-                        </button>
-                        <button
-                            onClick={handleExportPdf}
-                            disabled={exporting || !slides.some((s) => s.imageUrl)}
-                            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 disabled:opacity-40 transition-all"
-                        >
-                            {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                            PDF
-                        </button>
+                        <label className="text-xs text-indigo-600 font-bold cursor-pointer">
+                            Лого
+                            <input type="file" accept="image/*" className="hidden" onChange={handleBrandLogoUpload} />
+                        </label>
+                        <input type="color" value={current.brandPrimary || '#051C2C'} onChange={(e) => handlePresentationField('brandPrimary', e.target.value)} className="w-8 h-8 rounded cursor-pointer" title="Основной цвет" />
+                        <input type="color" value={current.brandSecondary || '#6366f1'} onChange={(e) => handlePresentationField('brandSecondary', e.target.value)} className="w-8 h-8 rounded cursor-pointer" title="Акцент" />
                     </div>
                 </div>
 
                 <div className="flex flex-1 overflow-hidden">
                     {/* Slide list */}
                     <div className="w-64 border-r border-slate-200 overflow-y-auto bg-slate-50 p-3 space-y-2">
+                        <div className="flex gap-1 mb-2">
+                            <button type="button" onClick={handleAddSlide} className="flex-1 text-xs font-bold py-1.5 bg-white border border-slate-200 rounded-lg hover:border-indigo-300">
+                                <Plus size={12} className="inline" /> Добавить
+                            </button>
+                        </div>
                         {slides.map((slide, idx) => (
                             <button
                                 key={slide.id || idx}
@@ -491,7 +937,20 @@ const Presentations = () => {
                                     </div>
                                 </div>
 
-                                <div className="p-4 bg-white border-t border-slate-200 space-y-3 max-h-48 overflow-y-auto">
+                                <div className="p-4 bg-white border-t border-slate-200 space-y-3 max-h-64 overflow-y-auto">
+                                    <div className="flex gap-2">
+                                        <select
+                                            value={activeSlide.type || 'content'}
+                                            onChange={(e) => { updateSlideField(activeSlideIdx, 'type', e.target.value); saveSlides(slides.map((s, i) => i === activeSlideIdx ? { ...s, type: e.target.value } : s)); }}
+                                            className="text-xs border border-slate-200 rounded-lg px-2 py-1"
+                                        >
+                                            {SLIDE_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                                        </select>
+                                        <button type="button" onClick={handleDuplicateSlide} className="text-xs px-2 py-1 border border-slate-200 rounded-lg"><Copy size={12} className="inline" /></button>
+                                        <button type="button" onClick={() => moveSlide(-1)} disabled={activeSlideIdx === 0} className="text-xs px-2 py-1 border border-slate-200 rounded-lg disabled:opacity-30">↑</button>
+                                        <button type="button" onClick={() => moveSlide(1)} disabled={activeSlideIdx >= slides.length - 1} className="text-xs px-2 py-1 border border-slate-200 rounded-lg disabled:opacity-30">↓</button>
+                                        <button type="button" onClick={handleDeleteSlide} className="text-xs px-2 py-1 border border-red-200 text-red-500 rounded-lg"><Trash2 size={12} className="inline" /></button>
+                                    </div>
                                     <input
                                         value={activeSlide.title || ''}
                                         onChange={(e) => updateSlideField(activeSlideIdx, 'title', e.target.value)}
@@ -507,6 +966,24 @@ const Presentations = () => {
                                         rows={2}
                                         className="w-full px-3 py-2 bg-slate-50 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
                                     />
+                                    <textarea
+                                        value={activeSlide.speakerNotes || ''}
+                                        onChange={(e) => updateSlideField(activeSlideIdx, 'speakerNotes', e.target.value)}
+                                        onBlur={saveSlides}
+                                        placeholder="Заметки спикера (не на слайде)"
+                                        rows={2}
+                                        className="w-full px-3 py-2 bg-amber-50 rounded-lg text-xs border border-amber-100 resize-none"
+                                    />
+                                    {activeSlide.imageHistory?.length > 0 && (
+                                        <div className="flex gap-2 items-center">
+                                            <span className="text-[10px] text-slate-400 font-bold">История:</span>
+                                            {activeSlide.imageHistory.map((h, hi) => (
+                                                <button key={hi} type="button" onClick={() => handleRestoreImage(hi)} className="w-10 h-10 rounded border overflow-hidden">
+                                                    <img src={getProxyUrl(h.imageUrl)} alt="" className="w-full h-full object-cover" />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                     <div>
                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
                                             Референс-картинки (GPT Image 2 image-to-image)
@@ -567,6 +1044,22 @@ const Presentations = () => {
                                     </button>
                                     <span className="text-xs font-bold text-slate-400">{activeSlideIdx + 1} / {slides.length}</span>
                                     <button
+                                        onClick={handlePreviewSlide}
+                                        disabled={regeneratingSlide || !activeSlide?.id || !canGenerate}
+                                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-40"
+                                    >
+                                        {regeneratingSlide ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                                        Пробный
+                                    </button>
+                                    <button
+                                        onClick={handleRegenerateSlide}
+                                        disabled={regeneratingSlide || !activeSlide?.id}
+                                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 disabled:opacity-40"
+                                    >
+                                        {regeneratingSlide ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                                        Перегенерировать
+                                    </button>
+                                    <button
                                         onClick={() => setActiveSlideIdx((i) => Math.min(slides.length - 1, i + 1))}
                                         disabled={activeSlideIdx >= slides.length - 1}
                                         className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30"
@@ -583,11 +1076,12 @@ const Presentations = () => {
                     </div>
                 </div>
 
-                {readyToGenerate && !generating && (
-                    <div className="px-6 py-2 bg-emerald-50 border-t border-emerald-100 text-center">
-                        <p className="text-xs font-bold text-emerald-700">Структура готова — можно генерировать слайды</p>
+                {readyToGenerate && !canGenerate && !generating && (
+                    <div className="px-6 py-2 bg-amber-50 border-t border-amber-100 text-center">
+                        <p className="text-xs font-bold text-amber-700">Нажми «Утвердить текст» перед генерацией</p>
                     </div>
                 )}
+            </div>
             </div>
         </div>
     );
