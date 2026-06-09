@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { MessageSquare, Video, Image as ImageIcon, Mic, Music, PenTool, Sparkles, ArrowRight, Grid, ReceiptText } from 'lucide-react';
+import { MessageSquare, Video, Image as ImageIcon, Mic, Music, PenTool, Sparkles, ArrowRight, Grid, ReceiptText, Presentation } from 'lucide-react';
 import { useUser } from '../context/UserContext';
 
 const Dashboard = () => {
@@ -77,6 +77,17 @@ const Dashboard = () => {
             bg: 'bg-emerald-50',
             text: 'text-emerald-600',
             link: '/audio',
+            active: true
+        },
+        {
+            id: 'presentations',
+            title: 'Презентации',
+            description: 'ИИ-планирование, слайды и экспорт в PDF.',
+            icon: Presentation,
+            color: 'bg-orange-500',
+            bg: 'bg-orange-50',
+            text: 'text-orange-600',
+            link: '/presentations',
             active: true
         },
         {

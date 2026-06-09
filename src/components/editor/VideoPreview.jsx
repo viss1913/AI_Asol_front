@@ -135,7 +135,6 @@ const VideoPreview = () => {
                         ref={videoRef}
                         src={getProxyUrl(currentClipData.clip.url)}
                         className="w-full h-full object-contain"
-                        crossOrigin="anonymous"
                         onTimeUpdate={handleTimeUpdate}
                         onEnded={handleVideoEnded}
                         onLoadedMetadata={() => console.log(`[Preview] Video loaded metadata: ${currentClipData.clip.url}`)}

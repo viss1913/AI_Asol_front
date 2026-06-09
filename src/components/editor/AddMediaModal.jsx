@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Upload, Video, Music, Loader, Play, ArrowLeft, Check, Trash2 } from 'lucide-react';
 import { contentService } from '../../services/api';
-import { getProxyUrl } from '../../utils/proxyUtils';
+import { getTaskPlaybackUrl } from '../../utils/proxyUtils';
 
 const AddMediaModal = ({ isOpen, onClose, onAddMedia }) => {
     const [activeTab, setActiveTab] = useState('history'); // 'history' or 'upload'
@@ -134,7 +134,7 @@ const AddMediaModal = ({ isOpen, onClose, onAddMedia }) => {
                 if (item.type === 'video') {
                     const video = document.createElement('video');
                     // Removed crossOrigin since COEP headers were removed from vite.config.js
-                    video.src = getProxyUrl(mediaUrl);
+                    video.src = getTaskPlaybackUrl(item);
                     await new Promise((resolve) => {
                         video.onloadedmetadata = () => {
                             duration = video.duration;
@@ -152,7 +152,7 @@ const AddMediaModal = ({ isOpen, onClose, onAddMedia }) => {
                 } else {
                     const audio = new Audio();
                     // Removed crossOrigin
-                    audio.src = getProxyUrl(mediaUrl);
+                    audio.src = getTaskPlaybackUrl(item);
                     await new Promise((resolve) => {
                         audio.onloadedmetadata = () => {
                             duration = audio.duration;
@@ -170,7 +170,7 @@ const AddMediaModal = ({ isOpen, onClose, onAddMedia }) => {
                 }
 
                 const promptText = formatName(item.prompt);
-                console.log(`[AddMediaModal] Adding item with URL: ${getProxyUrl(mediaUrl)}`);
+                console.log(`[AddMediaModal] Adding item with URL: ${getTaskPlaybackUrl(item)}`);
 
                 itemsToAdd.push({
                     type: item.type,
@@ -254,7 +254,7 @@ const AddMediaModal = ({ isOpen, onClose, onAddMedia }) => {
                             <div className="w-full max-w-2xl bg-black rounded-lg overflow-hidden shadow-lg mb-6 max-h-[400px] flex items-center justify-center">
                                 {previewItem.type === 'video' ? (
                                     <video
-                                        src={getProxyUrl(previewItem.resultUrl)}
+                                        src={getTaskPlaybackUrl(previewItem)}
                                         controls
                                         autoPlay
                                         playsInline
@@ -266,7 +266,7 @@ const AddMediaModal = ({ isOpen, onClose, onAddMedia }) => {
                                     <div className="w-full p-8 flex flex-col items-center justify-center bg-slate-900 text-white">
                                         <Music size={48} className="mb-4 text-indigo-400" />
                                         <audio
-                                            src={getProxyUrl(previewItem.resultUrl)}
+                                            src={getTaskPlaybackUrl(previewItem)}
                                             controls
                                             autoPlay
                                             className="w-full"
@@ -376,7 +376,7 @@ const AddMediaModal = ({ isOpen, onClose, onAddMedia }) => {
                                                             <div className="aspect-video w-full bg-slate-200 relative">
                                                                 {item.type === 'video' ? (
                                                                     <video
-                                                                        src={getProxyUrl(item.previewUrl || item.resultUrl)}
+                                                                        src={getTaskPlaybackUrl({ ...item, resultUrl: item.previewUrl || item.resultUrl })}
                                                                         className="w-full h-full object-cover"
                                                                         muted
                                                                         loop

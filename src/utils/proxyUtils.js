@@ -1,7 +1,32 @@
 /**
- * URL для <img src> / превью: публичный R2 (pub-*.r2.dev) грузим напрямую.
- * Прокси /videos/proxy для картинок часто отдаёт не то тело ответа — превью чёрное/пустое.
- * Для fetch / скачивания по-прежнему используй getProxyUrl.
+ * Origin бэкенда (Railway) из VITE_API_BASE_URL. В dev — пусто (относительные пути через Vite proxy).
+ */
+export const getApiOrigin = () => {
+    const base = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+    if (!base.startsWith('http')) return '';
+    try {
+        return new URL(base).origin;
+    } catch {
+        return '';
+    }
+};
+
+/**
+ * Путь с бэка (/api/v1/...) → URL для браузера.
+ * На статике ai-asol.ru нельзя src="/api/v1/..." — нужен полный origin Railway.
+ */
+export const resolveApiPath = (path) => {
+    if (!path || typeof path !== 'string') return '';
+    if (/^https?:\/\//i.test(path)) return path;
+    if (path.startsWith('/')) {
+        const origin = getApiOrigin();
+        return origin ? `${origin}${path}` : path;
+    }
+    return path;
+};
+
+/**
+ * URL для <img src> / превью загруженных файлов (не history task).
  */
 export const getEmbedMediaUrl = (url) => {
     if (!url) return '';
@@ -21,53 +46,79 @@ export const getEmbedMediaUrl = (url) => {
 };
 
 /**
- * Helper to proxy URLs in development to avoid CORS issues.
- * In production, returns original URLs (no proxy needed).
- * @param {string} url - The URL to process
- * @returns {string} - The processed URL
+ * Плеер / превью / seek — mediaUrls.proxy или fallback на R2 proxy.
+ * Не использовать direct R2 на фронтовом домене.
+ */
+export const getTaskPlaybackUrl = (taskOrHistory) => {
+    const t = taskOrHistory || {};
+    if (t.mediaUrls?.proxy) {
+        return resolveApiPath(t.mediaUrls.proxy);
+    }
+    if (t.playbackUrl) {
+        return t.playbackUrl.startsWith('http') || t.playbackUrl.startsWith('/')
+            ? resolveApiPath(t.playbackUrl)
+            : t.playbackUrl;
+    }
+    const url =
+        t.url ||
+        t.resultUrl ||
+        t.output_url ||
+        t.video_url ||
+        t.image_url ||
+        (Array.isArray(t.result) ? t.result[0] : undefined);
+    return getProxyUrl(url);
+};
+
+/**
+ * Относительный путь download с бэка или /history/:id/download.
+ */
+export const getTaskDownloadPath = (taskOrHistory) => {
+    const t = taskOrHistory || {};
+    const id = t.id;
+    if (t.mediaUrls?.download) {
+        return resolveApiPath(t.mediaUrls.download);
+    }
+    if (id) {
+        return resolveApiPath(`/history/${id}/download`);
+    }
+    return '';
+};
+
+/**
+ * Fallback proxy для R2, если mediaUrls ещё нет (галерея /assets/all).
  */
 export const getProxyUrl = (url) => {
     if (!url) return '';
-    // Already relative or blob — return as is
     if (url.startsWith('/') || url.startsWith('blob:')) return url;
 
-    // Handle paths starting with uploads/
     if (url.startsWith('uploads/')) {
         return '/' + url;
     }
 
-    // In production — use backend proxy for R2 storage to avoid CORS issues
     if (!import.meta.env.DEV) {
         if (url.includes('r2.dev') || url.includes('r2.cloudflarestorage.com')) {
-            // Use the API base URL to build the proxy path
             const apiBase = import.meta.env.VITE_API_BASE_URL || '/api/v1';
-
-            // If it's a relative path (like /api/v1), we should make it absolute if needed,
-            // but usually VITE_API_BASE_URL is absolute in production env.
-            return `${apiBase}/videos/proxy?url=${encodeURIComponent(url)}`;
+            if (apiBase.startsWith('http')) {
+                return `${apiBase}/videos/proxy?url=${encodeURIComponent(url)}`;
+            }
+            return `/api/v1/videos/proxy?url=${encodeURIComponent(url)}`;
         }
         return url;
     }
 
-    // --- Development only: proxy through Vite dev server ---
     try {
         const urlObj = new URL(url);
 
-        // Cloudflare R2 storage — proxy through /r2-media
         if (urlObj.hostname.includes('r2.dev') || urlObj.hostname.includes('r2.cloudflarestorage.com')) {
             const proxyUrl = '/r2-media' + urlObj.pathname + urlObj.search;
-            console.log(`[Proxy] R2 URL (DEV): ${url} -> ${proxyUrl}`);
             return proxyUrl;
         }
 
-        // Railway backend — proxy through Vite /api or /uploads
         if (urlObj.hostname.includes('railway.app') || urlObj.hostname.includes('asol')) {
-            const proxyUrl = urlObj.pathname + urlObj.search;
-            console.log(`[Proxy] Backend URL (DEV): ${url} -> ${proxyUrl}`);
-            return proxyUrl;
+            return urlObj.pathname + urlObj.search;
         }
-    } catch (e) {
-        // Not a valid absolute URL, return as is
+    } catch {
+        /* not absolute */
     }
 
     return url;

@@ -16,6 +16,7 @@ import CookieConsent from './components/common/CookieConsent';
 import Dashboard from './pages/Dashboard';
 import Gallery from './pages/Gallery';
 import Transactions from './pages/Transactions';
+import Presentations from './pages/Presentations';
 
 import { useUser } from './context/UserContext';
 
@@ -43,11 +44,12 @@ function App() {
   }
 
   const isChat = location.pathname.startsWith('/chat');
+  const isPresentations = location.pathname.startsWith('/presentations');
 
   return (
-    <div className={`min-h-screen bg-white ${isChat ? 'h-screen overflow-hidden' : ''}`}>
+    <div className={`min-h-screen bg-white ${isChat || isPresentations ? 'h-screen overflow-hidden' : ''}`}>
       <Header />
-      <main className={isChat ? 'h-full pt-16' : 'pt-0'}>
+      <main className={isChat || isPresentations ? 'h-full pt-16' : 'pt-0'}>
         <Routes>
           <Route path="/" element={
             user ? <Navigate to="/dashboard" replace /> : <Landing />
@@ -120,6 +122,12 @@ function App() {
           <Route path="/chat" element={
             <ProtectedRoute>
               <Chat />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/presentations" element={
+            <ProtectedRoute>
+              <Presentations />
             </ProtectedRoute>
           } />
 

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Upload, Video, Music, Image as ImageIcon, Trash2 } from 'lucide-react';
-import { historyService } from '../../services/api';
+import { contentService } from '../../services/api';
 import { validateFile, getVideoMetadata } from '../../utils/editorUtils';
 import { useEditor } from '../../context/EditorContext';
-import { getProxyUrl } from '../../utils/proxyUtils';
+import { getTaskPlaybackUrl } from '../../utils/proxyUtils';
 
 const MediaLibrary = () => {
     const { addClip } = useEditor();
@@ -17,9 +17,9 @@ const MediaLibrary = () => {
 
     const loadHistory = async () => {
         try {
-            const data = await historyService.getHistory();
-            // Filter only video and audio items
-            const mediaItems = data.filter(item =>
+            const data = await contentService.fetchHistory();
+            const assets = data.data || data || [];
+            const mediaItems = assets.filter(item =>
                 item.type === 'video' || item.type === 'audio'
             );
             setHistory(mediaItems);
@@ -81,7 +81,7 @@ const MediaLibrary = () => {
             let duration = 0;
             if (item.type === 'video') {
                 const mediaUrl = item.url || item.video_url || item.result?.[0];
-                const proxiedUrl = getProxyUrl(mediaUrl);
+                const proxiedUrl = getTaskPlaybackUrl({ ...item, resultUrl: mediaUrl });
                 console.log(`[MediaLibrary] Fetching metadata from: ${proxiedUrl}`);
 
                 const response = await fetch(proxiedUrl, { mode: 'cors' });

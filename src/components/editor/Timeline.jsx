@@ -88,7 +88,6 @@ const TimelineClip = React.memo(({ clip, isSelected, onClick, onRemove, onTrimUp
             setHasError(false);
             const video = document.createElement('video');
             video.src = getProxyUrl(clip.url);
-            video.crossOrigin = 'anonymous';
 
             try {
                 await new Promise((resolve, reject) => {

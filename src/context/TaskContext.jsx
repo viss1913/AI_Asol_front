@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { historyService } from '../services/api';
+import { getTaskPlaybackUrl } from '../utils/proxyUtils';
 import { useUser } from './UserContext';
 
 const TASK_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
@@ -46,10 +47,13 @@ export const TaskProvider = ({ children }) => {
                 if (status === 'success') {
                     stopPolling(taskId);
                     const url = statusData.url || statusData.resultUrl || statusData.video_url || statusData.image_url || (statusData.result?.[0]);
+                    const playbackUrl = getTaskPlaybackUrl(statusData);
 
                     updateTask(taskId, {
                         status: 'success',
                         url,
+                        mediaUrls: statusData.mediaUrls,
+                        playbackUrl,
                         cost: statusData.cost
                     });
 

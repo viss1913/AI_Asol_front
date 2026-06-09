@@ -3,6 +3,8 @@ import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MessageSquare, AudioWaveform, Wand2, Play, Square, Download, Loader2, Plus, Trash2, Volume2, Sparkles, ChevronRight, AlertCircle, Clock, Info, X } from 'lucide-react';
 import { audioService, historyService, configService } from '../services/api';
+import { getTaskPlaybackUrl } from '../utils/proxyUtils';
+import { downloadHistoryFile } from '../utils/downloadUtils';
 import { useUser } from '../context/UserContext';
 import Button from '../components/common/Button';
 
@@ -180,7 +182,9 @@ const AudioGeneration = () => {
                     const finalItem = {
                         ...statusData,
                         id: taskId,
-                        output_url: statusData.url,
+                        output_url: statusData.url || statusData.resultUrl,
+                        mediaUrls: statusData.mediaUrls,
+                        playbackUrl: getTaskPlaybackUrl({ ...statusData, id: taskId }),
                         status: 'success'
                     };
                     setHistory(prev => prev.map(item => (item.id === tempId || item.id === taskId) ? finalItem : item));
@@ -202,9 +206,16 @@ const AudioGeneration = () => {
         }, 3000);
     };
 
-    const handleDownload = async (url, filename) => {
+    const handleDownload = async (item, filename) => {
         try {
-            const response = await fetch(url);
+            if (item?.id) {
+                await downloadHistoryFile(item.id, 'audio', filename || `ai-asol-${item.id}.mp3`);
+                return;
+            }
+            const url = item?.output_url || item?.url;
+            if (!url) throw new Error('Нет URL для скачивания');
+            const playback = getTaskPlaybackUrl(item);
+            const response = await fetch(playback);
             const blob = await response.blob();
             const blobUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -216,7 +227,7 @@ const AudioGeneration = () => {
             window.URL.revokeObjectURL(blobUrl);
         } catch (err) {
             console.error("Download failed:", err);
-            window.open(url, '_blank');
+            alert('Не удалось скачать файл');
         }
     };
 
@@ -613,12 +624,12 @@ const AudioGeneration = () => {
                                                 </div>
                                             </div>
 
-                                            {item.status !== 'processing' && item.output_url && (
+                                            {item.status !== 'processing' && (item.output_url || item.playbackUrl) && (
                                                 <div className="space-y-4">
-                                                    <audio src={item.output_url} controls className="w-full h-8" />
+                                                    <audio src={getTaskPlaybackUrl(item)} controls className="w-full h-8" />
                                                     <div className="flex gap-2">
                                                         <button
-                                                            onClick={() => handleDownload(item.output_url, `ai-asol-${item.id}.mp3`)}
+                                                            onClick={() => handleDownload(item, `ai-asol-${item.id}.mp3`)}
                                                             className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all shadow-sm active:scale-95 cursor-pointer"
                                                         >
                                                             <Download size={14} /> Скачать

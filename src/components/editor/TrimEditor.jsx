@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Scissors, X, Play, Pause } from 'lucide-react';
 import { useEditor } from '../../context/EditorContext';
 import { formatTime } from '../../utils/editorUtils';
+import { getProxyUrl } from '../../utils/proxyUtils';
 
 const TrimEditor = () => {
     const { clips, selectedClipId, updateClip, setSelectedClipId } = useEditor();
@@ -28,8 +29,7 @@ const TrimEditor = () => {
         if (!selectedClip || selectedClip.type !== 'video') return;
 
         const video = document.createElement('video');
-        video.src = selectedClip.url;
-        video.crossOrigin = 'anonymous';
+        video.src = getProxyUrl(selectedClip.url);
 
         const thumbs = [];
         const count = 12; // Number of thumbnails

@@ -84,6 +84,12 @@ export const historyService = {
         const response = await api.get(`/history/${taskId}`);
         return response.data;
     },
+    downloadFile: async (taskId) => {
+        const response = await api.get(`/history/${taskId}/download`, {
+            responseType: 'blob',
+        });
+        return response.data;
+    },
 };
 
 export const contentService = {
@@ -200,6 +206,53 @@ export const configService = {
     calculateCost: async (model, options = {}) => {
         const response = await api.post('/config/calculate', { model, options });
         return response.data; // { cost: 630 }
+    },
+};
+
+export const presentationService = {
+    list: async () => {
+        const response = await api.get('/presentations');
+        return response.data;
+    },
+    create: async (data = {}) => {
+        const response = await api.post('/presentations', data);
+        return response.data;
+    },
+    getById: async (id) => {
+        const response = await api.get(`/presentations/${id}`);
+        return response.data;
+    },
+    update: async (id, data) => {
+        const response = await api.put(`/presentations/${id}`, data);
+        return response.data;
+    },
+    updateSlides: async (id, slides) => {
+        const response = await api.put(`/presentations/${id}/slides`, { slides });
+        return response.data;
+    },
+    delete: async (id) => {
+        const response = await api.delete(`/presentations/${id}`);
+        return response.data;
+    },
+    sendChat: async (id, message) => {
+        const response = await api.post(`/presentations/${id}/chat`, { message });
+        return response.data;
+    },
+    generate: async (id) => {
+        const response = await api.post(`/presentations/${id}/generate`);
+        return response.data;
+    },
+    getStatus: async (id) => {
+        const response = await api.get(`/presentations/${id}/status`);
+        return response.data;
+    },
+    estimateCost: async (id) => {
+        const response = await api.get(`/presentations/${id}/estimate`);
+        return response.data;
+    },
+    exportPdf: async (id) => {
+        const response = await api.post(`/presentations/${id}/export-pdf`);
+        return response.data;
     },
 };
 

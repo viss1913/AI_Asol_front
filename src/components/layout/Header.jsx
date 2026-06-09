@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { MessageSquare, Video, Image as ImageIcon, Mic, Music, PenTool, LogOut, LayoutDashboard, User, Plus, Film, Menu, X, Grid } from 'lucide-react';
+import { MessageSquare, Video, Image as ImageIcon, Mic, Music, PenTool, LogOut, LayoutDashboard, User, Plus, Film, Menu, X, Grid, Presentation } from 'lucide-react';
 import { useUser } from '../../context/UserContext';
 import { authService } from '../../services/api';
 import TopUpModal from '../TopUpModal';
@@ -25,6 +25,7 @@ const Header = () => {
         { id: 'video', label: 'Видео', icon: <Video size={18} />, path: '/video', disabled: false },
         { id: 'image', label: 'Изображения', icon: <ImageIcon size={18} />, path: '/image', disabled: false },
         { id: 'audio', label: 'Звук', icon: <Mic size={18} />, path: '/audio', disabled: false },
+        { id: 'presentations', label: 'Презентации', icon: <Presentation size={18} />, path: '/presentations', disabled: false },
         { id: 'editor', label: 'Монтаж', icon: <Film size={18} />, path: '/video-editor', disabled: false },
         { id: 'music', label: 'Музыка', icon: <Music size={18} />, path: '#', disabled: true, badge: 'Скоро' },
         { id: 'writer', label: 'AI Писатель', icon: <PenTool size={18} />, path: '#', disabled: true, badge: 'Скоро' },

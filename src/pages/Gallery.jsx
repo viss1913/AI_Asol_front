@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Grid, Video, Image as ImageIcon, Music, Download, Share2, Trash2, Loader2, Sparkles, Filter, MoreVertical, Maximize2, X } from 'lucide-react';
 import { contentService } from '../services/api';
 import Button from '../components/common/Button';
-import { getProxyUrl, getEmbedMediaUrl } from '../utils/proxyUtils';
+import { getTaskPlaybackUrl } from '../utils/proxyUtils';
+import { downloadHistoryFile } from '../utils/downloadUtils';
 
 const Gallery = () => {
     const [assets, setAssets] = useState([]);
@@ -36,20 +37,26 @@ const Gallery = () => {
         return asset.type === filter;
     });
 
-    const handleDownload = async (url, type, name) => {
+    const handleDownload = async (asset) => {
         try {
-            const response = await fetch(getProxyUrl(url));
+            if (asset.id) {
+                await downloadHistoryFile(asset.id, asset.type);
+                return;
+            }
+            const src = getTaskPlaybackUrl(asset);
+            const response = await fetch(src);
             const blob = await response.blob();
             const downloadUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = downloadUrl;
-            link.download = `asol-${name}-${Date.now()}.${type === 'video' ? 'mp4' : (type === 'audio' ? 'mp3' : 'png')}`;
+            link.download = `asol-${asset.id || Date.now()}.${asset.type === 'video' ? 'mp4' : (asset.type === 'audio' ? 'mp3' : 'png')}`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(downloadUrl);
         } catch (err) {
-            window.open(url, '_blank');
+            console.error('Download failed:', err);
+            alert('Не удалось скачать файл');
         }
     };
 
@@ -160,7 +167,7 @@ const Gallery = () => {
                                         </div>
                                     ) : (
                                         <img
-                                            src={getEmbedMediaUrl(asset.previewUrl || asset.resultUrl)}
+                                            src={getTaskPlaybackUrl({ ...asset, resultUrl: asset.previewUrl || asset.resultUrl })}
                                             alt={asset.prompt}
                                             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                                             // Removed crossOrigin since COEP headers were removed from vite.config.js
@@ -206,7 +213,7 @@ const Gallery = () => {
                                         </button>
                                         <div className="flex items-center gap-1">
                                             <button
-                                                onClick={() => handleDownload(getProxyUrl(asset.resultUrl), asset.type, asset.id)}
+                                                onClick={() => handleDownload(asset)}
                                                 className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
                                                 title="Скачать"
                                             >
@@ -250,7 +257,7 @@ const Gallery = () => {
                             <div className="flex-1 bg-black relative flex items-center justify-center min-h-[300px]">
                                 {selectedAsset.type === 'video' ? (
                                     <video
-                                        src={getEmbedMediaUrl(selectedAsset.resultUrl)}
+                                        src={getTaskPlaybackUrl(selectedAsset)}
                                         controls
                                         autoPlay
                                         className="max-w-full max-h-full"
@@ -263,11 +270,11 @@ const Gallery = () => {
                                         <div className="w-32 h-32 rounded-full bg-indigo-600/20 flex items-center justify-center text-indigo-600 animate-pulse">
                                             <Music size={64} />
                                         </div>
-                                        <audio src={getEmbedMediaUrl(selectedAsset.resultUrl)} controls className="w-full max-w-md" />
+                                        <audio src={getTaskPlaybackUrl(selectedAsset)} controls className="w-full max-w-md" />
                                     </div>
                                 ) : (
                                     <img
-                                        src={getEmbedMediaUrl(selectedAsset.resultUrl)}
+                                        src={getTaskPlaybackUrl(selectedAsset)}
                                         alt=""
                                         className="max-w-full max-h-full object-contain"
                                     />
@@ -319,7 +326,7 @@ const Gallery = () => {
                                 <div className="space-y-3">
                                     <Button
                                         className="w-full h-14"
-                                        onClick={() => handleDownload(selectedAsset.resultUrl, selectedAsset.type, selectedAsset.id)}
+                                        onClick={() => handleDownload(selectedAsset)}
                                     >
                                         <Download size={20} />
                                         Скачать результат

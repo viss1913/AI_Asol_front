@@ -8,7 +8,8 @@ import { useUser } from '../context/UserContext';
 import { useTasks } from '../context/TaskContext';
 import { Folder, Plus, CreditCard, X } from 'lucide-react';
 import MediaGalleryModal from '../components/editor/MediaGalleryModal';
-import { getEmbedMediaUrl } from '../utils/proxyUtils';
+import { getEmbedMediaUrl, getTaskPlaybackUrl } from '../utils/proxyUtils';
+import { downloadHistoryFile } from '../utils/downloadUtils';
 
 const Editor = ({ defaultTab }) => {
     const { updateBalance } = useUser();
@@ -42,6 +43,9 @@ const Editor = ({ defaultTab }) => {
     const [imageEndUrl, setImageEndUrl] = useState('');
     const [videoCost, setVideoCost] = useState(250); // Dynamic cost
     const [imageCost, setImageCost] = useState(50); // Default image cost
+    const [imageResolution, setImageResolution] = useState('2K'); // GPT Image 2: 1K | 2K | 4K
+
+    const isGptImage2Model = (m) => m === 'gpt-image-2-text-to-image' || m === 'gpt-image-2-image-to-image' || m === 'gpt-image-2';
     const [uploading, setUploading] = useState(false);
     const [uploadingEnd, setUploadingEnd] = useState(false);
     const [showGalleryModal, setShowGalleryModal] = useState(false);
@@ -67,18 +71,20 @@ const Editor = ({ defaultTab }) => {
         fetchCost();
     }, [videoModel, soraDuration, soraQuality]);
 
-    // Calculate image cost when model changes
+    // Calculate image cost when model or resolution changes
     useEffect(() => {
         const fetchCost = async () => {
             try {
-                const data = await configService.calculateCost(model);
-                setImageCost(data.cost || (model === 'google/nano-banana' ? 0.35 : 0.85));
+                const costModel = isGptImage2Model(model) ? 'gpt-image-2-text-to-image' : model;
+                const options = isGptImage2Model(model) ? { resolution: imageResolution } : {};
+                const data = await configService.calculateCost(costModel, options);
+                setImageCost(data.cost || (model === 'google/nano-banana' ? 10 : 16));
             } catch (error) {
                 console.error('Image cost calculation error:', error);
             }
         };
         fetchCost();
-    }, [model]);
+    }, [model, imageResolution]);
 
     useEffect(() => {
         fetchProjects();
@@ -183,14 +189,22 @@ const Editor = ({ defaultTab }) => {
         try {
             let initialData;
             if (activeTab === 'image') {
-                const finalModel = imageUrl ? 'google/nano-banana-edit' : model;
+                let finalModel = model;
+                if (isGptImage2Model(model)) {
+                    finalModel = imageUrl ? 'gpt-image-2-image-to-image' : 'gpt-image-2-text-to-image';
+                } else if (imageUrl && (model === 'google/nano-banana' || model === 'nano-banana')) {
+                    finalModel = 'google/nano-banana-edit';
+                }
                 const imageParams = {
                     prompt,
                     model: finalModel,
                     projectId: selectedProjectId || undefined,
                     aspect_ratio: aspectRatio,
-                    image_url: imageUrl || undefined
+                    image_url: imageUrl || undefined,
                 };
+                if (isGptImage2Model(model)) {
+                    imageParams.resolution = imageResolution;
+                }
                 initialData = await contentService.generateImage(imageParams);
             } else {
                 const videoParams = {
@@ -299,7 +313,8 @@ const Editor = ({ defaultTab }) => {
                                                 <div className="grid grid-cols-1 gap-3">
                                                     {[
                                                         { id: 'google/nano-banana', name: 'Nano Banana', desc: 'Стандартная генерация' },
-                                                        { id: 'banana-pro', name: 'Banana Pro', desc: 'Максимальное качество и детализация' }
+                                                        { id: 'banana-pro', name: 'Banana Pro', desc: 'Максимальное качество и детализация' },
+                                                        { id: 'gpt-image-2-text-to-image', name: 'GPT Image 2', desc: 'Текст и фотореализм от OpenAI' },
                                                     ].map(m => (
                                                         <div key={m.id} className="space-y-3">
                                                             <button
@@ -317,13 +332,38 @@ const Editor = ({ defaultTab }) => {
                                                 </div>
                                             </div>
 
+                                            {isGptImage2Model(model) && (
+                                                <div className="space-y-4 mb-10">
+                                                    <label className="text-sm font-bold text-slate-500 uppercase tracking-widest block">Разрешение</label>
+                                                    <div className="flex bg-slate-50 p-1 rounded-2xl">
+                                                        {['1K', '2K', '4K'].map(r => {
+                                                            const disabled = r === '4K' && aspectRatio === '1:1';
+                                                            return (
+                                                                <button
+                                                                    key={r}
+                                                                    disabled={disabled}
+                                                                    onClick={() => !disabled && setImageResolution(r)}
+                                                                    className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${imageResolution === r ? 'bg-white text-[#6366f1] shadow-sm' : 'text-slate-400'} ${disabled ? 'opacity-30 cursor-not-allowed' : ''}`}
+                                                                    title={disabled ? '4K недоступно для 1:1' : ''}
+                                                                >
+                                                                    {r}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             <div className="space-y-4 mb-10">
                                                 <label className="text-sm font-bold text-slate-500 uppercase tracking-widest block">Соотношение сторон</label>
                                                 <div className="flex bg-slate-50 p-1 rounded-2xl">
                                                     {['1:1', '16:9', '9:16'].map(r => (
                                                         <button
                                                             key={r}
-                                                            onClick={() => setAspectRatio(r)}
+                                                            onClick={() => {
+                                                                setAspectRatio(r);
+                                                                if (r === '1:1' && imageResolution === '4K') setImageResolution('2K');
+                                                            }}
                                                             className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${aspectRatio === r ? 'bg-white text-[#6366f1] shadow-sm' : 'text-slate-400'}`}
                                                         >
                                                             {r}
@@ -656,7 +696,12 @@ const Editor = ({ defaultTab }) => {
                                         <button
                                             onClick={async () => {
                                                 try {
-                                                    const response = await fetch(result.url);
+                                                    if (result.taskId) {
+                                                        await downloadHistoryFile(result.taskId, result.type);
+                                                        return;
+                                                    }
+                                                    const src = result.playbackUrl || getTaskPlaybackUrl(result);
+                                                    const response = await fetch(src);
                                                     const blob = await response.blob();
                                                     const url = window.URL.createObjectURL(blob);
                                                     const link = document.createElement('a');
@@ -667,7 +712,8 @@ const Editor = ({ defaultTab }) => {
                                                     document.body.removeChild(link);
                                                     window.URL.revokeObjectURL(url);
                                                 } catch (err) {
-                                                    window.open(result.url, '_blank');
+                                                    console.error('Download failed:', err);
+                                                    alert('Не удалось скачать файл');
                                                 }
                                             }}
                                             className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-slate-900 transition-all"
@@ -691,7 +737,14 @@ const Editor = ({ defaultTab }) => {
                                                     exit={{ opacity: 0, scale: 0.9 }}
                                                     onClick={() => {
                                                         if (task.status === 'success') {
-                                                            setResult({ url: task.url, type: task.type, prompt: task.prompt });
+                                                            setResult({
+                                                                url: task.url,
+                                                                playbackUrl: task.playbackUrl || getTaskPlaybackUrl(task),
+                                                                mediaUrls: task.mediaUrls,
+                                                                taskId: task.id,
+                                                                type: task.type,
+                                                                prompt: task.prompt
+                                                            });
                                                         }
                                                     }}
                                                     className={`p-3 rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${task.status === 'success'
@@ -704,7 +757,7 @@ const Editor = ({ defaultTab }) => {
                                                             {task.status === 'success' ? (
                                                                 task.type === 'video' ? (
                                                                     <video
-                                                                        src={task.url}
+                                                                        src={task.playbackUrl || getTaskPlaybackUrl(task)}
                                                                         className="w-full h-full object-cover"
                                                                         preload="metadata"
                                                                         onMouseOver={(e) => e.target.play()}
@@ -712,7 +765,7 @@ const Editor = ({ defaultTab }) => {
                                                                         muted
                                                                     />
                                                                 ) : (
-                                                                    <img src={task.url} alt="" className="w-full h-full object-cover" />
+                                                                    <img src={task.playbackUrl || getTaskPlaybackUrl(task)} alt="" className="w-full h-full object-cover" />
                                                                 )
                                                             ) : task.status === 'failed' ? (
                                                                 <AlertCircle className="text-red-400" size={24} />
@@ -766,17 +819,17 @@ const Editor = ({ defaultTab }) => {
                                             <div className="relative aspect-video rounded-2xl overflow-hidden bg-black shadow-inner group">
                                                 {result.type === 'video' ? (
                                                     <video
-                                                        key={result.url}
-                                                        src={result.url}
+                                                        key={result.playbackUrl || result.url}
+                                                        src={result.playbackUrl || getTaskPlaybackUrl(result)}
                                                         controls
                                                         autoPlay
                                                         className="w-full h-full object-contain"
                                                     />
                                                 ) : (
-                                                    <img src={result.url} alt="Preview" className="w-full h-full object-contain" />
+                                                    <img src={result.playbackUrl || getTaskPlaybackUrl(result)} alt="Preview" className="w-full h-full object-contain" />
                                                 )}
                                                 <button
-                                                    onClick={() => window.open(result.url, '_blank')}
+                                                    onClick={() => window.open(result.playbackUrl || getTaskPlaybackUrl(result), '_blank')}
                                                     className="absolute top-4 right-4 bg-black/50 hover:bg-black text-white p-2 rounded-xl backdrop-blur-md transition-all scale-0 group-hover:scale-100"
                                                 >
                                                     <Maximize2 size={16} />
