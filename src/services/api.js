@@ -234,7 +234,23 @@ export const presentationService = {
         const response = await api.delete(`/presentations/${id}`);
         return response.data;
     },
-    sendChat: async (id, message) => {
+    sendChat: async (id, message, files = []) => {
+        if (files?.length) {
+            const formData = new FormData();
+            formData.append('message', message || '');
+            files.forEach((file) => formData.append('files', file));
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${api.defaults.baseURL}/presentations/${id}/chat`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                body: formData,
+            });
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw { response: { status: response.status, data: err } };
+            }
+            return response.json();
+        }
         const response = await api.post(`/presentations/${id}/chat`, { message });
         return response.data;
     },

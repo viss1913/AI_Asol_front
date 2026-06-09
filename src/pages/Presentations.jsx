@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { presentationService } from '../services/api';
+import { presentationService, contentService } from '../services/api';
 import { useUser } from '../context/UserContext';
 import { getProxyUrl } from '../utils/proxyUtils';
 import {
     Plus, Send, Loader2, Trash2, Presentation, ChevronLeft, ChevronRight,
-    Download, Sparkles, Bot, User, ArrowLeft, FileText
+    Download, Sparkles, Bot, User, ArrowLeft, FileText, Paperclip, ImagePlus, X
 } from 'lucide-react';
 import avatarBase from '../assets/avatar.png';
 
@@ -31,6 +31,15 @@ const Presentations = () => {
     const [readyToGenerate, setReadyToGenerate] = useState(false);
     const messagesEndRef = useRef(null);
     const pollRef = useRef(null);
+    const chatFileInputRef = useRef(null);
+    const slideFileInputRef = useRef(null);
+    const [chatFiles, setChatFiles] = useState([]);
+    const [uploadingRef, setUploadingRef] = useState(false);
+
+    const getSlideRefs = (slide) => {
+        if (!slide?.referenceImageUrls) return [];
+        return Array.isArray(slide.referenceImageUrls) ? slide.referenceImageUrls : [];
+    };
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -103,16 +112,22 @@ const Presentations = () => {
 
     const handleSend = async (e) => {
         e.preventDefault();
-        if (!input.trim() || loading || !current) return;
+        if ((!input.trim() && !chatFiles.length) || loading || !current) return;
 
-        const userMsg = { role: 'user', content: input };
+        const userMsg = {
+            role: 'user',
+            content: input || (chatFiles.length ? '📎 Прикреплены изображения' : ''),
+            imageUrls: chatFiles.map((f) => f.name),
+        };
         setMessages((prev) => [...prev, userMsg]);
         const msg = input;
+        const filesToSend = [...chatFiles];
         setInput('');
+        setChatFiles([]);
         setLoading(true);
 
         try {
-            const data = await presentationService.sendChat(current.id, msg);
+            const data = await presentationService.sendChat(current.id, msg, filesToSend);
             setMessages((prev) => [...prev, { role: 'assistant', content: data.message, cost: data.cost }]);
             if (data.presentation) {
                 setCurrent(data.presentation);
@@ -177,14 +192,47 @@ const Presentations = () => {
         setSlides((prev) => prev.map((s, i) => (i === idx ? { ...s, [field]: value } : s)));
     };
 
-    const saveSlides = async () => {
+    const saveSlides = async (slidesToSave = slides) => {
         if (!current) return;
         try {
-            const data = await presentationService.updateSlides(current.id, slides);
+            const data = await presentationService.updateSlides(current.id, slidesToSave);
             setSlides(data.slides || []);
         } catch (e) {
             alert('Ошибка сохранения');
         }
+    };
+
+    const handleSlideRefUpload = async (e) => {
+        const files = Array.from(e.target.files || []);
+        if (!files.length || !activeSlide) return;
+        setUploadingRef(true);
+        try {
+            const urls = [];
+            for (const file of files.slice(0, 3)) {
+                const res = await contentService.uploadFile(file);
+                if (res?.url) urls.push(res.url);
+            }
+            const merged = [...getSlideRefs(activeSlide), ...urls].slice(0, 5);
+            const newSlides = slides.map((s, i) =>
+                i === activeSlideIdx ? { ...s, referenceImageUrls: merged } : s
+            );
+            setSlides(newSlides);
+            await saveSlides(newSlides);
+        } catch (err) {
+            alert('Не удалось загрузить изображение');
+        } finally {
+            setUploadingRef(false);
+            if (slideFileInputRef.current) slideFileInputRef.current.value = '';
+        }
+    };
+
+    const removeSlideRef = async (urlIdx) => {
+        const refs = getSlideRefs(activeSlide).filter((_, i) => i !== urlIdx);
+        const newSlides = slides.map((s, i) =>
+            i === activeSlideIdx ? { ...s, referenceImageUrls: refs.length ? refs : null } : s
+        );
+        setSlides(newSlides);
+        await saveSlides(newSlides);
     };
 
     const activeSlide = slides[activeSlideIdx];
@@ -273,7 +321,7 @@ const Presentations = () => {
                         <div className="text-center py-12 text-slate-400">
                             <Bot size={40} className="mx-auto mb-3 opacity-30" />
                             <p className="text-sm font-medium">Расскажи, какую презентацию делаем?</p>
-                            <p className="text-xs mt-1">Тема, аудитория, количество слайдов...</p>
+                            <p className="text-xs mt-1">Можешь прикрепить картинки — привяжу к слайдам. GPT Image 2 сделает слайд с текстом</p>
                         </div>
                     )}
                     {messages.map((m, i) => (
@@ -283,6 +331,9 @@ const Presentations = () => {
                             </div>
                             <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm ${m.role === 'user' ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700'}`}>
                                 {m.content}
+                                {m.imageUrls?.length > 0 && (
+                                    <p className="text-[10px] mt-1 opacity-70">📎 {m.imageUrls.length} изображений</p>
+                                )}
                             </div>
                         </div>
                     ))}
@@ -298,17 +349,50 @@ const Presentations = () => {
                 </div>
 
                 <form onSubmit={handleSend} className="p-4 border-t border-slate-100">
+                    {chatFiles.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            {chatFiles.map((f, i) => (
+                                <span key={i} className="flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded-lg">
+                                    <ImagePlus size={12} />
+                                    {f.name.slice(0, 20)}
+                                    <button type="button" onClick={() => setChatFiles((prev) => prev.filter((_, j) => j !== i))}>
+                                        <X size={12} />
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                    )}
                     <div className="flex gap-2">
+                        <input
+                            type="file"
+                            ref={chatFileInputRef}
+                            className="hidden"
+                            accept="image/jpeg,image/png,image/webp"
+                            multiple
+                            onChange={(e) => {
+                                const picked = Array.from(e.target.files || []);
+                                setChatFiles((prev) => [...prev, ...picked].slice(0, 5));
+                                e.target.value = '';
+                            }}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => chatFileInputRef.current?.click()}
+                            className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-xl transition-all"
+                            title="Прикрепить картинки"
+                        >
+                            <Paperclip size={18} />
+                        </button>
                         <input
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder="Опиши презентацию..."
+                            placeholder="Опиши презентацию или «эту картинку на слайд 2»..."
                             className="flex-1 px-4 py-3 bg-slate-50 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             disabled={loading}
                         />
                         <button
                             type="submit"
-                            disabled={loading || !input.trim()}
+                            disabled={loading || (!input.trim() && !chatFiles.length)}
                             className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-40 transition-all"
                         >
                             <Send size={18} />
@@ -327,7 +411,9 @@ const Presentations = () => {
                             onBlur={() => presentationService.update(current.id, { title: current.title })}
                             className="text-lg font-black text-slate-900 bg-transparent border-none focus:outline-none"
                         />
-                        <p className="text-xs text-slate-400">{slides.length} слайдов · {current.status}</p>
+                        <p className="text-xs text-slate-400">
+                            {slides.length} слайдов · GPT Image 2 с текстом · {current.status}
+                        </p>
                     </div>
                     <div className="flex items-center gap-2">
                         {estimate && (
@@ -364,7 +450,10 @@ const Presentations = () => {
                                 className={`w-full text-left p-3 rounded-xl text-sm transition-all ${activeSlideIdx === idx ? 'bg-white shadow-md border border-indigo-200' : 'hover:bg-white border border-transparent'}`}
                             >
                                 <p className="font-bold text-slate-800 truncate">{slide.title || `Слайд ${idx + 1}`}</p>
-                                <p className="text-[10px] text-slate-400 mt-0.5 uppercase">{slide.status || 'pending'}</p>
+                                <p className="text-[10px] text-slate-400 mt-0.5 uppercase">
+                                    {slide.status || 'pending'}
+                                    {getSlideRefs(slide).length > 0 && ' · 📎'}
+                                </p>
                             </button>
                         ))}
                         {slides.length === 0 && (
@@ -418,14 +507,54 @@ const Presentations = () => {
                                         rows={2}
                                         className="w-full px-3 py-2 bg-slate-50 rounded-lg text-sm border border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
                                     />
-                                    <textarea
-                                        value={activeSlide.imagePrompt || ''}
-                                        onChange={(e) => updateSlideField(activeSlideIdx, 'imagePrompt', e.target.value)}
-                                        onBlur={saveSlides}
-                                        placeholder="Промпт для картинки (англ.)"
-                                        rows={2}
-                                        className="w-full px-3 py-2 bg-slate-50 rounded-lg text-xs border border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none text-slate-500"
-                                    />
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
+                                            Референс-картинки (GPT Image 2 image-to-image)
+                                        </label>
+                                        <input
+                                            type="file"
+                                            ref={slideFileInputRef}
+                                            className="hidden"
+                                            accept="image/jpeg,image/png,image/webp"
+                                            multiple
+                                            onChange={handleSlideRefUpload}
+                                        />
+                                        <div className="flex flex-wrap gap-2 mb-2">
+                                            {getSlideRefs(activeSlide).map((url, ri) => (
+                                                <div key={ri} className="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-200">
+                                                    <img src={getProxyUrl(url)} alt="" className="w-full h-full object-cover" />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeSlideRef(ri)}
+                                                        className="absolute top-0 right-0 p-0.5 bg-black/60 text-white rounded-bl"
+                                                    >
+                                                        <X size={10} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            <button
+                                                type="button"
+                                                disabled={uploadingRef}
+                                                onClick={() => slideFileInputRef.current?.click()}
+                                                className="w-16 h-16 rounded-lg border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-400 hover:border-indigo-400 hover:text-indigo-500 transition-all"
+                                            >
+                                                {uploadingRef ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={18} />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
+                                            Промпт генерации (текст + расположение + стиль)
+                                        </label>
+                                        <textarea
+                                            value={activeSlide.imagePrompt || ''}
+                                            onChange={(e) => updateSlideField(activeSlideIdx, 'imagePrompt', e.target.value)}
+                                            onBlur={saveSlides}
+                                            placeholder="English: layout, exact text to render, colors, style. GPT Image 2 нарисует весь слайд с текстом."
+                                            rows={3}
+                                            className="w-full px-3 py-2 bg-slate-50 rounded-lg text-xs border border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none text-slate-600"
+                                        />
+                                    </div>
                                 </div>
 
                                 <div className="flex items-center justify-center gap-4 py-2 bg-white border-t border-slate-100">
