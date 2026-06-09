@@ -1,8 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { chatService } from '../services/api';
 import { getProxyUrl } from '../utils/proxyUtils';
 import { useUser } from '../context/UserContext';
-import { Send, User, Bot, MessageSquare, Loader2, Trash2, X, Paperclip, FileText, Download } from 'lucide-react';
+import {
+    Send, User, Bot, MessageSquare, Loader2, Trash2, X, Paperclip, FileText, Download,
+    ChevronLeft, Plus, Sparkles,
+} from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import avatarBase from '../assets/avatar.png';
