@@ -44,6 +44,53 @@ const SLIDE_TYPES = [
     { id: 'closing', label: 'Финал' },
 ];
 
+const SLIDE_STATUS_LABELS = {
+    pending: 'Ожидает',
+    generating: 'Рисуем...',
+    done: 'Готово',
+    failed: 'Ошибка',
+};
+
+const SlideTextMockup = ({ slide, styleId = 'mckinsey' }) => {
+    const isDark = styleId === 'dark_tech';
+    const bg = isDark ? '#1a1a2e' : '#ffffff';
+    const titleColor = isDark ? '#ffffff' : '#051C2C';
+    const bodyColor = isDark ? '#cbd5e1' : '#334155';
+    const isTitle = slide.type === 'title' || slide.type === 'section' || slide.type === 'closing';
+
+    return (
+        <div
+            className="w-full h-full p-6 sm:p-8 flex flex-col overflow-hidden text-left"
+            style={{ background: bg }}
+        >
+            <div className="absolute top-3 left-3 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full bg-amber-100 text-amber-800">
+                Превью текста
+            </div>
+            {slide.title && (
+                <h3
+                    className={`font-black leading-tight mb-3 ${isTitle ? 'text-2xl sm:text-3xl flex-1 flex items-center justify-center text-center' : 'text-lg sm:text-xl'}`}
+                    style={{ color: titleColor }}
+                >
+                    {slide.title}
+                </h3>
+            )}
+            {slide.content && (
+                <div
+                    className={`text-sm sm:text-base whitespace-pre-line leading-relaxed ${isTitle ? 'text-center' : ''}`}
+                    style={{ color: bodyColor }}
+                >
+                    {slide.content}
+                </div>
+            )}
+            {!slide.title && !slide.content && (
+                <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+                    Текст слайда появится после чата с Асоль
+                </div>
+            )}
+        </div>
+    );
+};
+
 const DEFAULT_STYLES = [
     { id: 'mckinsey', label: 'McKinsey' },
     { id: 'bcg', label: 'BCG / Big 3' },
@@ -608,7 +655,7 @@ const Presentations = () => {
             </div>
             <div className="flex flex-1 overflow-hidden min-h-0">
             {/* Left: Chat */}
-            <div className={`${mobileTab === 'chat' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[42%] flex-col border-r border-slate-200 bg-white`}>
+            <div className={`${mobileTab === 'chat' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[36%] xl:w-[32%] flex-col border-r border-slate-200 bg-white`}>
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-3">
                     <button onClick={() => setCurrent(null)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500">
                         <ArrowLeft size={18} />
@@ -793,97 +840,92 @@ const Presentations = () => {
             </div>
 
             {/* Right: Structure + Preview */}
-            <div className={`${mobileTab === 'slides' ? 'flex' : 'hidden'} lg:flex flex-1 flex-col overflow-hidden`}>
-                <div className="px-4 lg:px-6 py-4 border-b border-slate-200 bg-white space-y-3">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className={`${mobileTab === 'slides' ? 'flex' : 'hidden'} lg:flex flex-1 flex-col overflow-hidden min-w-0`}>
+                {/* Шапка — 2 ряда, читаемо */}
+                <div className="shrink-0 border-b border-slate-200 bg-white">
+                    <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100">
                         <div className="min-w-0 flex-1">
                             <input
                                 value={current.title || ''}
                                 onChange={(e) => setCurrent({ ...current, title: e.target.value })}
                                 onBlur={() => presentationService.update(current.id, { title: current.title })}
-                                className="text-lg font-black text-slate-900 bg-transparent border-none focus:outline-none w-full"
+                                className="text-base font-black text-slate-900 bg-transparent border-none focus:outline-none w-full truncate"
                             />
-                            <div className="flex flex-wrap items-center gap-2 mt-1">
-                                <span className="text-xs text-slate-400">
-                                    {slides.length} слайдов · {STATUS_LABELS[current.status] || current.status}
-                                </span>
-                                <select
-                                    value={current.style || 'mckinsey'}
-                                    onChange={(e) => handleStyleChange(e.target.value)}
-                                    className="text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1"
-                                >
-                                    {stylePresets.map((s) => (
-                                        <option key={s.id} value={s.id}>{s.label}</option>
-                                    ))}
-                                </select>
-                                <select
-                                    value={current.mode || 'full_image'}
-                                    onChange={(e) => handlePresentationField('mode', e.target.value)}
-                                    className="text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1"
-                                >
-                                    <option value="full_image">Текст на картинке</option>
-                                    <option value="hybrid">Hybrid (текст в PDF)</option>
-                                </select>
-                                <select
-                                    value={current.resolution || '2K'}
-                                    onChange={(e) => handlePresentationField('resolution', e.target.value)}
-                                    className="text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1"
-                                >
-                                    <option value="1K">1K</option>
-                                    <option value="2K">2K</option>
-                                    <option value="4K">4K</option>
-                                </select>
-                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                                {slides.length} слайдов · <span className="font-bold text-indigo-600">{STATUS_LABELS[current.status] || current.status}</span>
+                                {estimate ? ` · ~${estimate.totalCost} ₽` : ''}
+                            </p>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                            {estimate && (
-                                <span className="text-xs text-slate-500 font-medium">
-                                    ~{estimate.totalCost} ₽ ({estimate.pendingSlides} слайдов)
-                                </span>
-                            )}
+                        <div className="flex flex-wrap gap-2">
                             <button
                                 onClick={handleApproveText}
                                 disabled={!slides.length || current.status === 'text_approved' || current.status === 'ready'}
-                                className="flex items-center gap-1 px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-bold hover:bg-emerald-100 disabled:opacity-40"
+                                className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 disabled:opacity-40 shadow-sm"
                             >
-                                <CheckCircle2 size={14} />
-                                Утвердить текст
+                                <CheckCircle2 size={16} />
+                                1. Утвердить текст
                             </button>
                             <button
                                 onClick={handleGenerate}
                                 disabled={generating || !slides.length || !canGenerate}
-                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 disabled:opacity-40"
+                                className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 disabled:opacity-40 shadow-sm"
                             >
                                 {generating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                                {generating ? 'Генерация...' : 'Сгенерировать'}
+                                2. Сгенерировать
                             </button>
-                            <button onClick={handleExportPdf} disabled={exporting || !slides.some((s) => s.imageUrl)} className="flex items-center gap-1 px-3 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold disabled:opacity-40">
-                                {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                            <button onClick={handleExportPdf} disabled={exporting || !slides.some((s) => s.imageUrl)} className="px-3 py-2.5 bg-slate-800 text-white rounded-xl text-sm font-bold disabled:opacity-40">
                                 PDF
                             </button>
-                            <button onClick={handleExportPptx} disabled={exportingPptx || !slides.length} className="flex items-center gap-1 px-3 py-2 bg-slate-700 text-white rounded-xl text-xs font-bold disabled:opacity-40">
-                                {exportingPptx ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                            <button onClick={handleExportPptx} disabled={exportingPptx || !slides.length} className="px-3 py-2.5 bg-slate-600 text-white rounded-xl text-sm font-bold disabled:opacity-40">
                                 PPTX
                             </button>
                         </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3 p-2 bg-slate-50 rounded-xl border border-slate-100">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">Бренд</span>
-                        {current.brandLogoUrl && (
-                            <img src={getProxyUrl(current.brandLogoUrl)} alt="" className="w-8 h-8 rounded object-cover" />
-                        )}
-                        <label className="text-xs text-indigo-600 font-bold cursor-pointer">
-                            Лого
-                            <input type="file" accept="image/*" className="hidden" onChange={handleBrandLogoUpload} />
+                    <div className="px-4 py-2 flex flex-wrap items-center gap-3 bg-slate-50 text-sm">
+                        <label className="flex items-center gap-1.5 text-slate-600">
+                            <span className="text-xs font-bold text-slate-400">Стиль</span>
+                            <select value={current.style || 'mckinsey'} onChange={(e) => handleStyleChange(e.target.value)} className="text-xs font-semibold border border-slate-200 rounded-lg px-2 py-1.5 bg-white">
+                                {stylePresets.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                            </select>
                         </label>
-                        <input type="color" value={current.brandPrimary || '#051C2C'} onChange={(e) => handlePresentationField('brandPrimary', e.target.value)} className="w-8 h-8 rounded cursor-pointer" title="Основной цвет" />
-                        <input type="color" value={current.brandSecondary || '#6366f1'} onChange={(e) => handlePresentationField('brandSecondary', e.target.value)} className="w-8 h-8 rounded cursor-pointer" title="Акцент" />
+                        <label className="flex items-center gap-1.5 text-slate-600">
+                            <span className="text-xs font-bold text-slate-400">Режим</span>
+                            <select value={current.mode || 'full_image'} onChange={(e) => handlePresentationField('mode', e.target.value)} className="text-xs font-semibold border border-slate-200 rounded-lg px-2 py-1.5 bg-white">
+                                <option value="full_image">Картинка с текстом</option>
+                                <option value="hybrid">Hybrid</option>
+                            </select>
+                        </label>
+                        <label className="flex items-center gap-1.5 text-slate-600">
+                            <span className="text-xs font-bold text-slate-400">Качество</span>
+                            <select value={current.resolution || '2K'} onChange={(e) => handlePresentationField('resolution', e.target.value)} className="text-xs font-semibold border border-slate-200 rounded-lg px-2 py-1.5 bg-white">
+                                <option value="1K">1K</option>
+                                <option value="2K">2K</option>
+                                <option value="4K">4K</option>
+                            </select>
+                        </label>
+                        <div className="flex items-center gap-2 ml-auto">
+                            <span className="text-xs font-bold text-slate-400">Бренд</span>
+                            {current.brandLogoUrl && <img src={getProxyUrl(current.brandLogoUrl)} alt="" className="w-7 h-7 rounded object-cover border" />}
+                            <label className="text-xs font-bold text-indigo-600 cursor-pointer px-2 py-1 bg-white border rounded-lg">
+                                Лого
+                                <input type="file" accept="image/*" className="hidden" onChange={handleBrandLogoUpload} />
+                            </label>
+                            <input type="color" value={current.brandPrimary || '#051C2C'} onChange={(e) => handlePresentationField('brandPrimary', e.target.value)} className="w-7 h-7 rounded border cursor-pointer" title="Цвет" />
+                            <input type="color" value={current.brandSecondary || '#6366f1'} onChange={(e) => handlePresentationField('brandSecondary', e.target.value)} className="w-7 h-7 rounded border cursor-pointer" title="Акцент" />
+                        </div>
                     </div>
+                    {!canGenerate && slides.length > 0 && (
+                        <div className="px-4 py-2 bg-amber-50 border-t border-amber-100 text-center">
+                            <p className="text-sm font-bold text-amber-800">
+                                Сначала нажми «Утвердить текст» — потом можно генерировать картинки
+                            </p>
+                        </div>
+                    )}
                 </div>
 
-                <div className="flex flex-1 overflow-hidden">
+                <div className="flex flex-1 overflow-hidden min-h-0">
                     {/* Slide list */}
-                    <div className="w-64 border-r border-slate-200 overflow-y-auto bg-slate-50 p-3 space-y-2">
+                    <div className="w-52 xl:w-60 shrink-0 border-r border-slate-200 overflow-y-auto bg-slate-50 p-2 space-y-1.5">
                         <div className="flex gap-1 mb-2">
                             <button type="button" onClick={handleAddSlide} className="flex-1 text-xs font-bold py-1.5 bg-white border border-slate-200 rounded-lg hover:border-indigo-300">
                                 <Plus size={12} className="inline" /> Добавить
@@ -896,8 +938,8 @@ const Presentations = () => {
                                 className={`w-full text-left p-3 rounded-xl text-sm transition-all ${activeSlideIdx === idx ? 'bg-white shadow-md border border-indigo-200' : 'hover:bg-white border border-transparent'}`}
                             >
                                 <p className="font-bold text-slate-800 truncate">{slide.title || `Слайд ${idx + 1}`}</p>
-                                <p className="text-[10px] text-slate-400 mt-0.5 uppercase">
-                                    {slide.status || 'pending'}
+                                <p className="text-[10px] text-slate-500 mt-0.5 font-medium">
+                                    {SLIDE_STATUS_LABELS[slide.status] || slide.status}
                                     {getSlideRefs(slide).length > 0 && ' · 📎'}
                                 </p>
                             </button>
@@ -908,36 +950,46 @@ const Presentations = () => {
                     </div>
 
                     {/* Preview + edit */}
-                    <div className="flex-1 flex flex-col overflow-hidden">
+                    <div className="flex-1 flex flex-col xl:flex-row overflow-hidden min-w-0 min-h-0">
                         {activeSlide ? (
                             <>
-                                <div className="flex-1 p-6 flex items-center justify-center bg-slate-100">
-                                    <div className="relative w-full max-w-2xl aspect-video rounded-xl overflow-hidden shadow-2xl bg-slate-800">
-                                        {activeSlide.imageUrl ? (
-                                            <img
-                                                src={getProxyUrl(activeSlide.imageUrl)}
-                                                alt=""
-                                                className="w-full h-full object-cover"
-                                            />
-                                        ) : (
-                                            <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center">
-                                                <FileText size={48} className="text-slate-500" />
-                                            </div>
-                                        )}
-                                        {current.mode !== 'full_image' && (activeSlide.title || activeSlide.content) && (
-                                            <div className="absolute inset-0 flex flex-col justify-end p-6 bg-gradient-to-t from-black/70 to-transparent">
-                                                {activeSlide.title && (
-                                                    <h3 className="text-white font-black text-xl md:text-2xl mb-2">{activeSlide.title}</h3>
-                                                )}
-                                                {activeSlide.content && (
-                                                    <p className="text-white/90 text-sm whitespace-pre-line">{activeSlide.content}</p>
-                                                )}
-                                            </div>
-                                        )}
+                                <div className="flex-1 min-h-[240px] xl:min-h-0 p-4 flex flex-col bg-slate-100 border-b xl:border-b-0 xl:border-r border-slate-200">
+                                    <p className="text-xs font-bold text-slate-500 mb-2 shrink-0">
+                                        {activeSlide.imageUrl ? 'Готовый слайд' : 'Так будет выглядеть текст (картинку нарисует ИИ после генерации)'}
+                                    </p>
+                                    <div className="flex-1 flex items-center justify-center min-h-0">
+                                        <div className="relative w-full max-w-3xl aspect-video rounded-xl overflow-hidden shadow-xl border border-slate-200 bg-white">
+                                            {activeSlide.imageUrl ? (
+                                                <>
+                                                    <img src={getProxyUrl(activeSlide.imageUrl)} alt="" className="w-full h-full object-cover" />
+                                                    {current.mode !== 'full_image' && (activeSlide.title || activeSlide.content) && (
+                                                        <div className="absolute inset-0 flex flex-col justify-end p-6 bg-gradient-to-t from-black/70 to-transparent pointer-events-none">
+                                                            {activeSlide.title && <h3 className="text-white font-black text-xl mb-2">{activeSlide.title}</h3>}
+                                                            {activeSlide.content && <p className="text-white/90 text-sm whitespace-pre-line">{activeSlide.content}</p>}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <SlideTextMockup slide={activeSlide} styleId={current.style} />
+                                            )}
+                                            {activeSlide.status === 'generating' && (
+                                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                                    <Loader2 size={40} className="animate-spin text-white" />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-center gap-2 mt-3 shrink-0">
+                                        <button onClick={handlePreviewSlide} disabled={regeneratingSlide || !activeSlide?.id || !canGenerate} className="px-4 py-2 text-sm font-bold text-emerald-700 bg-emerald-50 rounded-xl hover:bg-emerald-100 disabled:opacity-40">
+                                            Пробный слайд
+                                        </button>
+                                        <button onClick={handleRegenerateSlide} disabled={regeneratingSlide || !activeSlide?.id} className="px-4 py-2 text-sm font-bold text-indigo-700 bg-indigo-50 rounded-xl hover:bg-indigo-100 disabled:opacity-40">
+                                            Перегенерировать
+                                        </button>
                                     </div>
                                 </div>
 
-                                <div className="p-4 bg-white border-t border-slate-200 space-y-3 max-h-64 overflow-y-auto">
+                                <div className="w-full xl:w-[340px] shrink-0 p-4 bg-white space-y-3 overflow-y-auto max-h-[45vh] xl:max-h-none">
                                     <div className="flex gap-2">
                                         <select
                                             value={activeSlide.type || 'content'}
@@ -1034,36 +1086,12 @@ const Presentations = () => {
                                     </div>
                                 </div>
 
-                                <div className="flex items-center justify-center gap-4 py-2 bg-white border-t border-slate-100">
-                                    <button
-                                        onClick={() => setActiveSlideIdx((i) => Math.max(0, i - 1))}
-                                        disabled={activeSlideIdx === 0}
-                                        className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30"
-                                    >
+                                <div className="xl:hidden flex items-center justify-center gap-4 py-2 bg-white border-t border-slate-100 shrink-0">
+                                    <button onClick={() => setActiveSlideIdx((i) => Math.max(0, i - 1))} disabled={activeSlideIdx === 0} className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30">
                                         <ChevronLeft size={18} />
                                     </button>
-                                    <span className="text-xs font-bold text-slate-400">{activeSlideIdx + 1} / {slides.length}</span>
-                                    <button
-                                        onClick={handlePreviewSlide}
-                                        disabled={regeneratingSlide || !activeSlide?.id || !canGenerate}
-                                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-40"
-                                    >
-                                        {regeneratingSlide ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                                        Пробный
-                                    </button>
-                                    <button
-                                        onClick={handleRegenerateSlide}
-                                        disabled={regeneratingSlide || !activeSlide?.id}
-                                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 disabled:opacity-40"
-                                    >
-                                        {regeneratingSlide ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                                        Перегенерировать
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveSlideIdx((i) => Math.min(slides.length - 1, i + 1))}
-                                        disabled={activeSlideIdx >= slides.length - 1}
-                                        className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30"
-                                    >
+                                    <span className="text-sm font-bold text-slate-600">{activeSlideIdx + 1} / {slides.length}</span>
+                                    <button onClick={() => setActiveSlideIdx((i) => Math.min(slides.length - 1, i + 1))} disabled={activeSlideIdx >= slides.length - 1} className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30">
                                         <ChevronRight size={18} />
                                     </button>
                                 </div>
@@ -1076,11 +1104,6 @@ const Presentations = () => {
                     </div>
                 </div>
 
-                {readyToGenerate && !canGenerate && !generating && (
-                    <div className="px-6 py-2 bg-amber-50 border-t border-amber-100 text-center">
-                        <p className="text-xs font-bold text-amber-700">Нажми «Утвердить текст» перед генерацией</p>
-                    </div>
-                )}
             </div>
             </div>
         </div>
