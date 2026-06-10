@@ -162,7 +162,7 @@ const Presentations = () => {
             }
             return { file, kind: 'doc', name: file.name };
         });
-        setChatFiles((prev) => [...prev, ...items].slice(0, 5));
+        setChatFiles((prev) => [...prev, ...items].slice(0, 8));
     };
 
     const removeChatFile = (idx) => {
@@ -528,11 +528,11 @@ const Presentations = () => {
         setUploadingRef(true);
         try {
             const urls = [];
-            for (const file of files.slice(0, 3)) {
+            for (const file of files.slice(0, 8)) {
                 const res = await contentService.uploadFile(file);
                 if (res?.url) urls.push(res.url);
             }
-            const merged = [...getSlideRefs(activeSlide), ...urls].slice(0, 5);
+            const merged = [...getSlideRefs(activeSlide), ...urls].slice(0, 16);
             const newSlides = slides.map((s, i) =>
                 i === activeSlideIdx ? { ...s, referenceImageUrls: merged } : s
             );
@@ -788,7 +788,7 @@ const Presentations = () => {
                                 </div>
                             ))}
                             <p className="w-full text-[10px] text-slate-400 font-medium">
-                                {chatFiles.length}/5 · напиши «эту картинку на слайд 2»
+                                {chatFiles.length}/8 · можно несколько: «картинка 1 — аватар, картинка 2 — на экран»
                             </p>
                         </div>
                     )}

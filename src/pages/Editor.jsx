@@ -40,7 +40,9 @@ const Editor = ({ defaultTab }) => {
     const [soraDuration, setSoraDuration] = useState(10); // 10 or 15
     const [soraQuality, setSoraQuality] = useState('standard'); // 'standard' or 'high'
     const [imageUrl, setImageUrl] = useState('');
+    const [imageRefUrls, setImageRefUrls] = useState([]);
     const [imageEndUrl, setImageEndUrl] = useState('');
+    const MAX_IMAGE_REFS = 16;
     const [videoCost, setVideoCost] = useState(250); // Dynamic cost
     const [imageCost, setImageCost] = useState(50); // Default image cost
     const [imageResolution, setImageResolution] = useState('2K'); // GPT Image 2: 1K | 2K | 4K
@@ -140,8 +142,12 @@ const Editor = ({ defaultTab }) => {
     };
 
     const handleFileUpload = async (e, type = 'main') => {
-        const file = e.target ? e.target.files[0] : e; // Handle both event and raw file
-        if (!file) return;
+        const files = e.target?.files
+            ? Array.from(e.target.files)
+            : e instanceof File
+                ? [e]
+                : [];
+        if (!files.length) return;
 
         setShowGalleryModal(false);
         if (type === 'end') setUploadingEnd(true);
@@ -149,9 +155,22 @@ const Editor = ({ defaultTab }) => {
 
         setError(null);
         try {
-            const data = await contentService.uploadFile(file);
-            if (type === 'end') setImageEndUrl(data.url);
-            else setImageUrl(data.url);
+            if (activeTab === 'image' && type === 'main') {
+                const slotsLeft = MAX_IMAGE_REFS - imageRefUrls.length;
+                const toUpload = files.slice(0, slotsLeft);
+                const uploaded = [];
+                for (const file of toUpload) {
+                    const data = await contentService.uploadFile(file);
+                    if (data?.url) uploaded.push(data.url);
+                }
+                if (uploaded.length) {
+                    setImageRefUrls((prev) => [...prev, ...uploaded].slice(0, MAX_IMAGE_REFS));
+                }
+            } else {
+                const data = await contentService.uploadFile(files[0]);
+                if (type === 'end') setImageEndUrl(data.url);
+                else setImageUrl(data.url);
+            }
         } catch (err) {
             console.error("Upload failed:", err);
             const status = err.response?.status;
@@ -169,13 +188,19 @@ const Editor = ({ defaultTab }) => {
         }
     };
 
+    const removeImageRef = (idx) => {
+        setImageRefUrls((prev) => prev.filter((_, i) => i !== idx));
+    };
+
     const openGallery = (slot) => {
         setActiveGallerySlot(slot);
         setShowGalleryModal(true);
     };
 
     const handleGallerySelect = (url) => {
-        if (activeGallerySlot === 'end') setImageEndUrl(url);
+        if (activeTab === 'image' && activeGallerySlot === 'main') {
+            setImageRefUrls((prev) => [...prev, url].slice(0, MAX_IMAGE_REFS));
+        } else if (activeGallerySlot === 'end') setImageEndUrl(url);
         else setImageUrl(url);
         setShowGalleryModal(false);
     };
@@ -189,10 +214,11 @@ const Editor = ({ defaultTab }) => {
         try {
             let initialData;
             if (activeTab === 'image') {
+                const refs = imageRefUrls.filter(Boolean);
                 let finalModel = model;
                 if (isGptImage2Model(model)) {
-                    finalModel = imageUrl ? 'gpt-image-2-image-to-image' : 'gpt-image-2-text-to-image';
-                } else if (imageUrl && (model === 'google/nano-banana' || model === 'nano-banana')) {
+                    finalModel = refs.length ? 'gpt-image-2-image-to-image' : 'gpt-image-2-text-to-image';
+                } else if (refs.length && (model === 'google/nano-banana' || model === 'nano-banana')) {
                     finalModel = 'google/nano-banana-edit';
                 }
                 const imageParams = {
@@ -200,7 +226,8 @@ const Editor = ({ defaultTab }) => {
                     model: finalModel,
                     projectId: selectedProjectId || undefined,
                     aspect_ratio: aspectRatio,
-                    image_url: imageUrl || undefined,
+                    image_url: refs[0] || undefined,
+                    image_urls: refs.length ? refs : undefined,
                 };
                 if (isGptImage2Model(model)) {
                     imageParams.resolution = imageResolution;
@@ -516,7 +543,92 @@ const Editor = ({ defaultTab }) => {
                         {/* Image-to-Video / Reference Section */}
                         {(activeTab === 'video' || activeTab === 'image') && (
                             <div className={`grid gap-4 ${videoModel.startsWith('veo') && activeTab === 'video' ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                                {/* Slot 1: Start Frame / Reference */}
+                                {/* Image tab: несколько референсов (GPT Image 2) */}
+                                {activeTab === 'image' ? (
+                                    <section className="bg-slate-50 border-2 border-dashed border-slate-200 p-4 rounded-3xl overflow-hidden relative">
+                                        <input
+                                            type="file"
+                                            ref={fileInputRef}
+                                            onChange={(e) => handleFileUpload(e, 'main')}
+                                            accept="image/*,.heic,.heif"
+                                            multiple
+                                            className="hidden"
+                                        />
+                                        <div className="flex items-center justify-between gap-3 mb-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-slate-400 shadow-sm">
+                                                    {uploading ? <Loader2 size={20} className="animate-spin text-indigo-500" /> : <UploadIcon size={20} />}
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold text-slate-700">Референсы</p>
+                                                    <p className="text-[10px] text-slate-400 font-medium">
+                                                        {imageRefUrls.length}/{MAX_IMAGE_REFS} · GPT Image 2: до 16 картинок в один запрос
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openGallery('main')}
+                                                    className="flex items-center gap-1 rounded-xl bg-white px-2 py-1.5 text-[10px] font-bold text-indigo-600 shadow-sm border border-slate-100 hover:bg-indigo-50"
+                                                >
+                                                    <Grid3x3 size={14} />
+                                                    Галерея
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={uploading || imageRefUrls.length >= MAX_IMAGE_REFS}
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    className="rounded-xl bg-indigo-600 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-indigo-700 disabled:opacity-40"
+                                                >
+                                                    + Фото
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 mb-3">
+                                            Например: 1 — аватар, 2 — слайд на экране. В промпте укажи роли: «person from image 1, slide on screen from image 2».
+                                        </p>
+                                        <div className="flex flex-wrap gap-2 min-h-[4.5rem]">
+                                            {imageRefUrls.map((url, idx) => (
+                                                <div key={`${url}-${idx}`} className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200 bg-white">
+                                                    <img
+                                                        src={getEmbedMediaUrl(url)}
+                                                        alt={`Референс ${idx + 1}`}
+                                                        className="w-full h-full object-cover"
+                                                        loading="lazy"
+                                                    />
+                                                    <span className="absolute bottom-0 left-0 right-0 bg-black/55 text-white text-[9px] font-bold text-center py-0.5">
+                                                        #{idx + 1}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeImageRef(idx)}
+                                                        className="absolute top-0.5 right-0.5 bg-black/50 text-white p-0.5 rounded-full hover:bg-black"
+                                                    >
+                                                        <X size={10} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            {imageRefUrls.length < MAX_IMAGE_REFS && (
+                                                <button
+                                                    type="button"
+                                                    disabled={uploading}
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 hover:border-indigo-400 hover:text-indigo-500 transition-all"
+                                                >
+                                                    <UploadIcon size={16} />
+                                                    <span className="text-[9px] font-bold mt-1">Добавить</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                        {uploading && (
+                                            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 rounded-3xl bg-white/85 backdrop-blur-[2px]">
+                                                <Loader2 className="animate-spin text-indigo-500" size={28} />
+                                                <p className="text-xs font-bold text-slate-700">Загружаем…</p>
+                                            </div>
+                                        )}
+                                    </section>
+                                ) : (
                                 <section
                                     onClick={() => !uploading && fileInputRef.current?.click()}
                                     className="bg-slate-50 border-2 border-dashed border-slate-200 p-4 rounded-3xl group hover:border-[#6366f1] transition-all cursor-pointer overflow-hidden relative"
@@ -543,7 +655,7 @@ const Editor = ({ defaultTab }) => {
                                         </div>
                                         <div>
                                             <p className="text-sm font-bold text-slate-700">
-                                                {activeTab === 'image' ? 'Референс' : (videoModel.startsWith('veo') ? 'Старт' : 'Референс')}
+                                                {videoModel.startsWith('veo') ? 'Старт' : 'Референс'}
                                             </p>
                                             <p className="text-[10px] text-slate-400 font-medium">
                                                 {uploading ? 'Загрузка...' : 'Нажмите — файл с устройства'}
@@ -592,6 +704,7 @@ const Editor = ({ defaultTab }) => {
                                         </div>
                                     )}
                                 </section>
+                                )}
 
                                 {/* Slot 2: End Frame (Only for Veo) */}
                                 {activeTab === 'video' && videoModel.startsWith('veo') && (
