@@ -390,6 +390,11 @@ const Presentations = () => {
         e.target.value = '';
     };
 
+    const slidesDoneCount = slides.filter((s) => s.status === 'done').length;
+    const slidesPendingCount = slides.filter((s) => s.status === 'pending' || s.status === 'failed').length;
+    const canGenerate = current && CAN_GENERATE_STATUSES.includes(current.status);
+    const canApproveText = current && ['draft', 'failed'].includes(current.status) && slides.length > 0;
+
     const handleGenerate = async () => {
         if (!current || generating) return;
         if (!CAN_GENERATE_STATUSES.includes(current.status)) {
@@ -410,7 +415,11 @@ const Presentations = () => {
             alert('Нет слайдов для генерации');
             return;
         }
-        if (!confirm(`Сгенерировать ${count} слайдов за ~${totalCost || '?'} ₽?`)) return;
+        const countLabel = count === 1 ? '1 новый слайд' : `${count} слайдов`;
+        const doneNote = slidesDoneCount > 0 && count < slides.length
+            ? ` (${slidesDoneCount} уже готовы — трогать не будем)`
+            : '';
+        if (!confirm(`Сгенерировать ${countLabel} за ~${totalCost || '?'} ₽?${doneNote}`)) return;
         try {
             await presentationService.generate(current.id, force);
             setGenerating(true);
@@ -506,8 +515,6 @@ const Presentations = () => {
         }
     };
 
-    const canGenerate = current && CAN_GENERATE_STATUSES.includes(current.status);
-
     const updateSlideField = (idx, field, value) => {
         setSlides((prev) => prev.map((s, i) => (i === idx ? { ...s, [field]: value } : s)));
     };
@@ -550,6 +557,18 @@ const Presentations = () => {
         const refs = getSlideRefs(activeSlide).filter((_, i) => i !== urlIdx);
         const newSlides = slides.map((s, i) =>
             i === activeSlideIdx ? { ...s, referenceImageUrls: refs.length ? refs : null } : s
+        );
+        setSlides(newSlides);
+        await saveSlides(newSlides);
+    };
+
+    const handleUseSlideImageAsRef = async () => {
+        if (!activeSlide?.imageUrl) return;
+        const refs = getSlideRefs(activeSlide);
+        if (refs.includes(activeSlide.imageUrl)) return;
+        const merged = [activeSlide.imageUrl, ...refs].slice(0, 16);
+        const newSlides = slides.map((s, i) =>
+            i === activeSlideIdx ? { ...s, referenceImageUrls: merged } : s
         );
         setSlides(newSlides);
         await saveSlides(newSlides);
@@ -834,7 +853,7 @@ const Presentations = () => {
                         </button>
                     </div>
                     <p className="text-[10px] text-slate-400 mt-2 text-center">
-                        Ссылка · картинка/PDF/DOC скрепкой · Ctrl+V для фото
+                        Готовые слайды не сбросятся · «добавь 4-й» или «поправь слайд 2» · Ctrl+V для фото
                     </p>
                 </form>
             </div>
@@ -852,14 +871,18 @@ const Presentations = () => {
                                 className="text-base font-black text-slate-900 bg-transparent border-none focus:outline-none w-full truncate"
                             />
                             <p className="text-xs text-slate-500 mt-0.5">
-                                {slides.length} слайдов · <span className="font-bold text-indigo-600">{STATUS_LABELS[current.status] || current.status}</span>
-                                {estimate ? ` · ~${estimate.totalCost} ₽` : ''}
+                                {slides.length} слайдов
+                                {slidesDoneCount > 0 && ` · ${slidesDoneCount} готово`}
+                                {slidesPendingCount > 0 && ` · ${slidesPendingCount} новых`}
+                                {' · '}
+                                <span className="font-bold text-indigo-600">{STATUS_LABELS[current.status] || current.status}</span>
+                                {estimate && slidesPendingCount > 0 ? ` · ~${estimate.totalCost} ₽` : ''}
                             </p>
                         </div>
                         <div className="flex flex-wrap gap-2">
                             <button
                                 onClick={handleApproveText}
-                                disabled={!slides.length || current.status === 'text_approved' || current.status === 'ready'}
+                                disabled={!canApproveText}
                                 className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 disabled:opacity-40 shadow-sm"
                             >
                                 <CheckCircle2 size={16} />
@@ -1037,9 +1060,20 @@ const Presentations = () => {
                                         </div>
                                     )}
                                     <div>
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
-                                            Референс-картинки (GPT Image 2 image-to-image)
-                                        </label>
+                                        <div className="flex items-center justify-between gap-2 mb-1">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                                Референс-картинки (GPT Image 2 image-to-image)
+                                            </label>
+                                            {activeSlide.imageUrl && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleUseSlideImageAsRef}
+                                                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 whitespace-nowrap"
+                                                >
+                                                    Текущий слайд → референс
+                                                </button>
+                                            )}
+                                        </div>
                                         <input
                                             type="file"
                                             ref={slideFileInputRef}
